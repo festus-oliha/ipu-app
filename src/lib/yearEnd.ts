@@ -101,3 +101,39 @@ export async function yearEndPreview(year: { id: string; startDate: Date; endDat
   const earned = income.interest + income.investmentProfit + income.otherIncome - income.expenses;
   return { rows, totals, income, earned, lastMonth };
 }
+
+/**
+ * Year-change reminders for the Admin, worked out from today's date (Lagos):
+ * from 1 February open next year's months; from 1 March close the old year.
+ */
+export async function yearChangeReminders(todayIso: string) {
+  const years = await db.financialYear.findMany({ orderBy: { startDate: "asc" }, include: { periods: { orderBy: { month: "asc" } } } });
+  const out: { text: string; href: string }[] = [];
+  const newest = years[years.length - 1];
+  if (newest) {
+    const lastMonthStart = newest.endDate.toISOString().slice(0, 8) + "01"; // 1 February
+    const nextStart = new Date(Date.UTC(newest.endDate.getUTCFullYear(), 2, 1)).toISOString().slice(0, 10); // 1 March
+    const nextLabel = `${newest.endDate.getUTCFullYear()}–${newest.endDate.getUTCFullYear() + 1}`;
+    if (todayIso >= lastMonthStart) {
+      out.push({
+        text: todayIso < nextStart
+          ? `Open ${nextLabel} before 1 March, so March payments can be recorded.`
+          : `${nextLabel} is not open yet: March payments cannot be recorded until you open it.`,
+        href: "/office/year-end",
+      });
+    }
+  }
+  for (const y of years) {
+    if (y.status === "CLOSED") continue;
+    const endedOn = new Date(Date.UTC(y.endDate.getUTCFullYear(), y.endDate.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+    if (todayIso < endedOn) continue;
+    const open = y.periods.filter((p) => p.status === "OPEN").length;
+    out.push({
+      text: open
+        ? `${y.label} has ended: the Treasurer must close its remaining ${open === 1 ? "month" : `${open} months`}, then you set the dividend and close the year.`
+        : `${y.label} has ended: set the dividend rate and close the year.`,
+      href: "/office/year-end",
+    });
+  }
+  return out;
+}

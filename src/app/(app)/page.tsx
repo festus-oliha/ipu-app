@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { LOAN_STATUS_LABELS, OPEN_LOAN_STATUSES, memberPosition } from "@/lib/loans";
 import { formatNaira } from "@/lib/money";
 import { MONTH_NAMES, currentYear, formatDate, todayLagos } from "@/lib/periods";
+import { yearChangeReminders } from "@/lib/yearEnd";
 import { displayPhone } from "@/lib/phone";
 import { DEFAULT_RULES } from "@/lib/rules";
 
@@ -30,6 +31,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     : [null, [], [], []];
   const exited = memberId ? (await db.member.findUnique({ where: { id: memberId }, select: { status: true } }))?.status === "EXITED" : false;
   const today = todayLagos();
+  const yearTasks = hasRole(user, "ADMIN") ? await yearChangeReminders(today) : [];
   const [, mm, dd] = today.split("-").map(Number);
   const nextMonth = MONTH_NAMES[mm % 12];
   const dueMonth = dd <= 15 ? MONTH_NAMES[mm - 1] : nextMonth;
@@ -56,6 +58,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <h1 className="mt-1 font-display text-3xl text-ink">{name}</h1>
         {user.member ? <p className="mt-1 text-sm text-muted">{user.member.memberNo}</p> : null}
       </div>
+
+      {yearTasks.map((t) => (
+        <Notice key={t.text} tone="warning">
+          {t.text} <Link href={t.href} className="font-semibold text-forest underline">Go to Year end</Link>
+        </Notice>
+      ))}
 
       {totals && year ? (
         <>

@@ -161,6 +161,18 @@ const JOBS: { name: string; due: (t: Today) => string | null; run: (t: Today) =>
     },
   },
   {
+    // 1 and 20 February: remind the Admin to open next year's months before 1 March.
+    name: "year.open_reminder",
+    due: (t) => (t.m === 2 && (t.d === 1 || t.d === 20) ? t.iso : null),
+    run: async (t) => {
+      const next = await db.financialYear.findFirst({ where: { startDate: new Date(Date.UTC(t.y, 2, 1)) } });
+      if (next) return "already open";
+      const admins = await db.user.findMany({ where: { roles: { some: { role: "ADMIN" } } } });
+      for (const a of admins) await queueSms(a.phone, "year.open_reminder", `IPU app: please open the ${t.y}–${t.y + 1} year (Year end page) before 1 March so March payments can be recorded.`);
+      return `${admins.length} reminder(s)`;
+    },
+  },
+  {
     // 1st of each month: a full Excel copy of the records emailed to the Admin.
     name: "backup.monthly",
     due: (t) => (t.d === 1 ? t.iso.slice(0, 7) : null),
