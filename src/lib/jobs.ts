@@ -71,7 +71,7 @@ const JOBS: { name: string; due: (t: Today) => string | null; run: (t: Today) =>
       for (const { member, pos } of list) {
         await queueSms(member.phone, "interest.arrears", `IPU: Interest of ${formatNairaSms(pos.interestOwed)} was not paid by the 15th. It is now arrears and is added to next month's interest (no penalty).`);
         const loan = await db.loan.findFirst({ where: { borrowerId: member.id, status: "DISBURSED" }, include: { guarantor: true }, orderBy: { disbursedOn: "desc" } });
-        if (loan && loan.guarantor.status !== "EXITED") {
+        if (loan?.guarantor && loan.guarantor.status !== "EXITED") {
           const text = `IPU: ${memberName(member)}, whose loan you guarantee, has not paid interest of ${formatNairaSms(pos.interestOwed)} due on the 15th. Loan balance: ${formatNairaSms(pos.principal)}.`;
           await queueSms(loan.guarantor.phone, "guarantor.arrears", text);
           if (loan.guarantor.email) await queueEmail(loan.guarantor.email, "guarantor.arrears", "Loan you guarantee: interest unpaid", `${text}\n\nIyobor Progressive Union\n198, Old Sapele Road, Benin City · +234 907 672 9480`);
@@ -104,7 +104,7 @@ const JOBS: { name: string; due: (t: Today) => string | null; run: (t: Today) =>
       const loans = await db.loan.findMany({ where: { status: { in: ["DISBURSED", "DEFAULTED"] } }, include: { borrower: true, guarantor: true } });
       const positions = await positionsThrough(FAR);
       for (const l of loans) {
-        if (l.guarantor.status === "EXITED") continue;
+        if (!l.guarantor || l.guarantor.status === "EXITED") continue; // verbal guarantee: nobody on record
         const p = positions.get(l.borrowerId) ?? { principal: 0n, interestOwed: 0n };
         const body = [
           `Dear ${memberName(l.guarantor)},`,

@@ -59,7 +59,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
               initial={{
                 title: member.title ?? "",
                 fullName: member.fullName,
-                phone: displayPhone(member.phone),
+                phone: member.phone ? displayPhone(member.phone) : "",
                 email: member.email ?? "",
                 occupation: member.occupation ?? "",
                 address: member.address ?? "",

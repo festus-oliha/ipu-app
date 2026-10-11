@@ -13,7 +13,8 @@ export function normalizePhone(input: string): string | null {
 }
 
 /** +2349076729480 → 0907 672 9480 (how members write it). */
-export function displayPhone(stored: string): string {
+export function displayPhone(stored: string | null): string {
+  if (!stored) return "No phone yet";
   const n = stored.replace(/^\+234/, "0");
   return `${n.slice(0, 4)} ${n.slice(4, 7)} ${n.slice(7)}`;
 }

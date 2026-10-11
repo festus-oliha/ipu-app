@@ -114,8 +114,11 @@ type MemberConfig = {
   occupation?: string;
   check?: string;
 };
-type LoanConfig = { sn: number; borrower: string; month: string; amount: number; guarantorSn: number | null; check?: string };
-type Config = { workbook: string; openingBank: number; importThrough: string; members: MemberConfig[]; loans: LoanConfig[] };
+/** guarantorSn: the guarantor's S/N, or "verbal" for a guarantee agreed by word of mouth before the app. */
+type LoanConfig = { sn: number; borrower: string; month: string; amount: number; guarantorSn: number | "verbal" | null; check?: string };
+/** A contribution that pays ahead for several months (e.g. ₦60,000 = 4 × ₦15,000). */
+type BatchConfig = { sn: number; month: string; months: number };
+type Config = { workbook: string; openingBank: number; importThrough: string; members: MemberConfig[]; loans: LoanConfig[]; batches?: BatchConfig[] };
 
 function mostCommon(values: number[]) {
   const counts = new Map<number, number>();
@@ -142,10 +145,10 @@ function draftConfig(file: string, wbData: Awaited<ReturnType<typeof readWorkboo
   const loans: LoanConfig[] = [];
   for (const s of sheets) {
     for (const r of s.rows) {
-      if (r.d > 0) loans.push({ sn: r.sn, borrower: r.name, month: key(monthDate(startYear, s.index)), amount: r.d, guarantorSn: null, check: "GUARANTOR: enter the guarantor's S/N from Mem_Records" });
+      if (r.d > 0) loans.push({ sn: r.sn, borrower: r.name, month: key(monthDate(startYear, s.index)), amount: r.d, guarantorSn: null, check: 'GUARANTOR: the guarantor\'s S/N from Mem_Records, or "verbal"' });
     }
   }
-  return { workbook: path.basename(file), openingBank: 0, importThrough: thisMonth, members, loans };
+  return { workbook: path.basename(file), openingBank: 0, importThrough: thisMonth, members, loans, batches: [] };
 }
 
 // ───────────────────────── the import itself ─────────────────────────
@@ -161,13 +164,21 @@ async function run(file: string, cfg: Config, commit: boolean) {
   const used = sheets.filter((s) => s.index <= throughIndex);
   const lastClosed = throughIndex - 1; // the current month stays open for new payments
 
+  const notes: string[] = [];
   for (const m of cfg.members) {
-    if (!normalizePhone(m.phone)) problems.push(`S/N ${m.sn} ${m.fullName}: phone missing or not a Nigerian number.`);
+    if (m.phone && !normalizePhone(m.phone)) problems.push(`S/N ${m.sn} ${m.fullName}: "${m.phone}" is not a Nigerian phone number.`);
+    if (!m.phone) notes.push(`S/N ${m.sn} ${m.fullName}: no phone yet, so no login. Add it later under Members → Edit details.`);
     if (!(m.usualMonthly > 0)) problems.push(`S/N ${m.sn} ${m.fullName}: usual monthly contribution missing.`);
   }
   for (const l of cfg.loans) {
-    if (!cfg.members.some((m) => m.sn === l.guarantorSn)) problems.push(`Loan ${fmt(N(l.amount))} to S/N ${l.sn} in ${l.month}: guarantor not set.`);
+    if (l.guarantorSn === "verbal") continue;
+    if (!cfg.members.some((m) => m.sn === l.guarantorSn)) problems.push(`Loan ${fmt(N(l.amount))} to S/N ${l.sn} in ${l.month}: guarantor not set (an S/N, or "verbal").`);
     else if (l.guarantorSn === l.sn) problems.push(`Loan to S/N ${l.sn} in ${l.month}: a member cannot guarantee their own loan.`);
+  }
+  for (const b of cfg.batches ?? []) {
+    const s = sheets.find((x) => key(monthDate(startYear, x.index)) === b.month);
+    if (!s?.rows.some((r) => r.sn === b.sn && r.c > 0)) problems.push(`Batch for S/N ${b.sn} in ${b.month}: there is no contribution that month.`);
+    if (!(b.months >= 2 && b.months <= 12)) problems.push(`Batch for S/N ${b.sn} in ${b.month}: months must be 2–12.`);
   }
   const phones = cfg.members.map((m) => normalizePhone(m.phone)).filter(Boolean);
   for (const p of new Set(phones)) if (phones.filter((x) => x === p).length > 1) problems.push(`Phone ${p} is used by two members.`);
@@ -206,13 +217,20 @@ async function run(file: string, cfg: Config, commit: boolean) {
         // 2. Members: match an existing member by phone (or exact name), otherwise create with a login.
         const idBySn = new Map<number, string>();
         for (const m of cfg.members) {
-          const phone = normalizePhone(m.phone) ?? `+234000000${String(m.sn).padStart(4, "0")}`; // dry run only
+          const phone = normalizePhone(m.phone);
           const data = { title: m.title || null, fullName: m.fullName, usualMonthlyKobo: N(m.usualMonthly || 0), bankName: m.bankName ?? null, accountNumber: m.accountNumber ?? null, occupation: m.occupation ?? null };
-          const existing = (await tx.member.findUnique({ where: { phone } })) ?? (await tx.member.findFirst({ where: { fullName: { equals: m.fullName, mode: "insensitive" } } }));
+          const existing = (phone ? await tx.member.findUnique({ where: { phone } }) : null) ?? (await tx.member.findFirst({ where: { fullName: { equals: m.fullName, mode: "insensitive" } } }));
           if (existing) {
             await tx.member.update({ where: { id: existing.id }, data: { ...data, status: "ACTIVE" } });
             idBySn.set(m.sn, existing.id);
             report.push(`  ${existing.memberNo} ${m.fullName}: already in the app, details updated`);
+            continue;
+          }
+          if (!phone) {
+            const numbers = await tx.member.findMany({ select: { memberNo: true } });
+            const created = await tx.member.create({ data: { ...data, memberNo: nextMemberNo(numbers.map((n) => n.memberNo)), phone: null, joinedAt: new Date(Date.UTC(startYear, 2, 1)) } });
+            idBySn.set(m.sn, created.id);
+            report.push(`  ${created.memberNo} ${m.fullName}: created (no phone yet, no login)`);
             continue;
           }
           const temp = `ipu-${String(randomBytes(2).readUInt16BE() % 10000).padStart(4, "0")}-${"abcdefghjkmnpqrstuvwxyz"[randomBytes(1)[0] % 23]}${"abcdefghjkmnpqrstuvwxyz"[randomBytes(1)[0] % 23]}`;
@@ -238,8 +256,8 @@ async function run(file: string, cfg: Config, commit: boolean) {
           if (!period) throw new Error(`Month ${key(month)} missing in the app.`);
           // Each month's figures are dated the 1st; the workbook does not record days.
           const date = month;
-          const put = (memberId: string, type: "CONTRIBUTION" | "LOAN_GIVEN" | "INTEREST_PAID" | "LOAN_REPAID", naira: number, loanId?: string) =>
-            naira > 0 ? tx.ledgerEntry.create({ data: { date, periodId: period.id, memberId, type, amountKobo: N(naira), loanId, note: `Imported from ${cfg.workbook} (${s.month})`, enteredById: admin.id } }) : null;
+          const put = (memberId: string, type: "CONTRIBUTION" | "LOAN_GIVEN" | "INTEREST_PAID" | "LOAN_REPAID", naira: number, loanId?: string, coversMonths?: number) =>
+            naira > 0 ? tx.ledgerEntry.create({ data: { date, periodId: period.id, memberId, type, amountKobo: N(naira), loanId, coversMonths: coversMonths ?? null, note: `Imported from ${cfg.workbook} (${s.month})`, enteredById: admin.id } }) : null;
 
           for (const r of s.rows) {
             const memberId = idBySn.get(r.sn);
@@ -247,18 +265,19 @@ async function run(file: string, cfg: Config, commit: boolean) {
               if (r.c || r.d || r.g || r.i) problems.push(`${s.month}: row S/N ${r.sn} "${r.name}" has money but is not in Mem_Records.`);
               continue;
             }
-            await put(memberId, "CONTRIBUTION", r.c);
+            const batch = cfg.batches?.find((b) => b.sn === r.sn && b.month === key(month));
+            await put(memberId, "CONTRIBUTION", r.c, undefined, batch?.months);
             if (r.d > 0) {
               const lc = cfg.loans.find((l) => l.sn === r.sn && l.month === key(month));
-              const guarantorId = lc?.guarantorSn ? idBySn.get(lc.guarantorSn) : undefined;
+              const guarantorId = typeof lc?.guarantorSn === "number" ? idBySn.get(lc.guarantorSn) : undefined;
               const m = cfg.members.find((x) => x.sn === r.sn)!;
               const limit = loanLimit(N(m.usualMonthly || 0));
               const loan = await tx.loan.create({
                 data: {
                   borrowerId: memberId,
-                  guarantorId: guarantorId ?? memberId, // dry run only; --commit refuses missing guarantors
+                  guarantorId: guarantorId ?? null, // null = verbal guarantee before the app
                   amountKobo: N(r.d),
-                  purpose: `Imported from ${cfg.workbook}`,
+                  purpose: guarantorId ? `Imported from ${cfg.workbook}` : `Imported from ${cfg.workbook}; verbal guarantee (before the app)`,
                   status: "DISBURSED",
                   isException: N(r.d) > limit,
                   exceptionReason: N(r.d) > limit ? `Imported: above the limit of ${fmt(limit)} (usual monthly × 12)` : null,
@@ -322,6 +341,7 @@ async function run(file: string, cfg: Config, commit: boolean) {
 
   console.log(`\n${commit && !problems.length ? "IMPORTED" : "DRY RUN (nothing saved)"}: ${cfg.workbook}, ${used.length} months up to ${MONTHS[throughIndex]}; ${MONTHS[lastClosed]} and earlier closed\n`);
   console.log(["Members:", ...report].join("\n"));
+  if (notes.length) console.log(`\nNotes:\n${notes.map((p) => `  • ${p}`).join("\n")}`);
   if (problems.length) console.log(`\nTo fix before --commit:\n${problems.map((p) => `  • ${p}`).join("\n")}`);
   if (commit && !problems.length && logins.length > 1) {
     const out = path.join("import", `logins-${Date.now()}.csv`);

@@ -18,7 +18,7 @@ export async function recoveryPlan(loanId: string) {
   const [p, b, g, notice] = await Promise.all([
     memberPosition(loan.borrowerId),
     memberYearTotals(loan.borrowerId, year),
-    memberYearTotals(loan.guarantorId, year),
+    loan.guarantorId ? memberYearTotals(loan.guarantorId, year) : Promise.resolve({ savings: 0n }),
     db.auditLog.findFirst({ where: { action: "loan.default", recordId: loan.id }, orderBy: { at: "desc" } }),
   ]);
   const owed = owedOf(p);

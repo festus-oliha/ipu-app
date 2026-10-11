@@ -114,12 +114,15 @@ export default async function SheetPage({ searchParams }: { searchParams: Promis
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.memberId} className={`border-t border-line ${r.contribution === 0n ? "bg-ivory/60" : ""}`}>
+              <tr key={r.memberId} className={`border-t border-line ${r.contribution === 0n && !r.paidAhead ? "bg-ivory/60" : ""}`}>
                 <td className="px-3 py-2.5 font-mono text-xs whitespace-nowrap">{r.memberNo}</td>
                 <td className="px-3 py-2.5">
                   <Link href={`/office/members/${r.memberId}`} className="text-forest underline-offset-2 hover:underline">{r.name}</Link>
                 </td>
-                <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{money(r.contribution)}</td>
+                <td className="px-3 py-2.5 text-right font-semibold tabular-nums">
+                  {r.paidAhead ? <span className="text-xs font-normal text-forest">Paid ahead</span> : money(r.contribution)}
+                  {r.coversMonths > 1 ? <span className="block text-xs font-normal text-muted">covers {r.coversMonths} months</span> : null}
+                </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{money(r.membershipFee)}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{money(r.loanGiven)}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{money(r.interestPaid)}</td>
@@ -151,7 +154,7 @@ export default async function SheetPage({ searchParams }: { searchParams: Promis
         </table>
       </div>
       <p className="text-xs text-muted">
-        Shaded rows have no contribution this month. Loan balance is at the end of the month. Interest due is what must be paid by the
+        Shaded rows have no contribution this month; &ldquo;Paid ahead&rdquo; means an earlier payment covers it. Loan balance is at the end of the month. Interest due is what must be paid by the
         15th of next month (it appears once the month is closed); &ldquo;cr&rdquo; is a credit from overpaid interest.
       </p>
 

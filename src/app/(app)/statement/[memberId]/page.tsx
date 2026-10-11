@@ -56,7 +56,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
               {s.months.map((r) => (
                 <tr key={r.month.toISOString()} className="border-t border-line">
                   <td className="px-2 py-1.5">{monthLabel(r.month)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{m(r.contribution)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{r.paidAhead ? "paid ahead" : m(r.contribution)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{m(r.membershipFee)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{m(r.loanGiven)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{m(r.interestCharged)}</td>

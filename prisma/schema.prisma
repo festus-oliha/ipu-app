@@ -156,7 +156,7 @@ model Member {
   memberNo              String       @unique // IPU-0001
   title                 String? // Mrs, Mr, Miss, Madam
   fullName              String
-  phone                 String       @unique
+  phone                 String?      @unique // empty until known; no login without it
   email                 String?
   bankName              String?
   accountNumber         String?
@@ -239,6 +239,7 @@ model LedgerEntry {
   member       Member?      @relation(fields: [memberId], references: [id])
   type         EntryType
   amountKobo   BigInt // always positive; direction comes from the type
+  coversMonths Int? // contributions paid ahead: months covered, starting with this entry's month
   loanId       String?
   loan         Loan?        @relation(fields: [loanId], references: [id])
   investmentId String?
@@ -284,8 +285,8 @@ model Loan {
   id              String       @id @default(cuid())
   borrowerId      String
   borrower        Member       @relation("Borrower", fields: [borrowerId], references: [id])
-  guarantorId     String
-  guarantor       Member       @relation("Guarantor", fields: [guarantorId], references: [id])
+  guarantorId     String? // empty only for loans imported from the workbook (verbal guarantee)
+  guarantor       Member?      @relation("Guarantor", fields: [guarantorId], references: [id])
   amountKobo      BigInt
   purpose         String
   status          LoanStatus   @default(REQUESTED)

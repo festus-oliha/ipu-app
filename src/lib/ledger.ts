@@ -54,6 +54,46 @@ export const BANK_EFFECT: Record<EntryType, 1 | -1 | 0> = {
 /** Every row type that changes a member's loan account. */
 export const LOAN_TYPES: EntryType[] = ["LOAN_GIVEN", "LOAN_REPAID", "INTEREST_CHARGED", "INTEREST_PAID", "LOAN_DEDUCTED", "INTEREST_DEDUCTED", "CREDIT_REFUNDED"];
 
+const monthKeyOf = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+
+/**
+ * The months each member's contributions cover in a year. A contribution paid
+ * ahead (coversMonths > 1, e.g. ₦60,000 for four months at ₦15,000) counts for
+ * its own month and the following ones, up to February.
+ */
+export async function coveredMonths(year: { id: string }, memberId?: string) {
+  const rows = await db.ledgerEntry.findMany({
+    where: { ...LIVE, type: "CONTRIBUTION", amountKobo: { gt: 0 }, memberId: memberId ?? { not: null }, period: { yearId: year.id } },
+    select: { memberId: true, coversMonths: true, period: { select: { month: true } } },
+    orderBy: [{ period: { month: "asc" } }, { createdAt: "asc" }],
+  });
+  const last = await db.period.findFirst({ where: { yearId: year.id }, orderBy: { month: "desc" }, select: { month: true } });
+  const map = new Map<string, Set<string>>();
+  // Ordinary payments first: each counts for its own month.
+  for (const r of rows) {
+    const set = map.get(r.memberId!) ?? new Set<string>();
+    if ((r.coversMonths ?? 1) <= 1) set.add(monthKeyOf(r.period.month));
+    map.set(r.memberId!, set);
+  }
+  // Payments made ahead fill the next months not yet paid for, from their own month on
+  // (₦60,000 in April = April–July; another ₦60,000 in July = August–November).
+  for (const r of rows) {
+    if ((r.coversMonths ?? 1) <= 1) continue;
+    const set = map.get(r.memberId!)!;
+    let filled = 0;
+    for (let i = 0; filled < r.coversMonths! && i < 24; i++) {
+      const m = new Date(Date.UTC(r.period.month.getUTCFullYear(), r.period.month.getUTCMonth() + i, 1));
+      if (last && m > last.month) break;
+      const k = monthKeyOf(m);
+      if (!set.has(k)) {
+        set.add(k);
+        filled++;
+      }
+    }
+  }
+  return map;
+}
+
 /** A member's totals for one financial year, from live ledger rows. */
 export async function memberYearTotals(memberId: string, year: { id: string }) {
   const rows = await db.ledgerEntry.groupBy({
@@ -76,7 +116,10 @@ export async function memberYearTotals(memberId: string, year: { id: string }) {
   }
   // Savings = what was paid in, less anything already taken to clear a debt
   // (the member's own, or a loan they guaranteed).
-  return { contributions, deducted, savings: contributions - deducted, membershipFees, monthsContributed: monthsWithContribution.size };
+  // Months paid for, counting months covered by a payment made ahead.
+  const covered = (await coveredMonths(year, memberId)).get(memberId);
+  const monthsContributed = Math.max(covered?.size ?? 0, monthsWithContribution.size);
+  return { contributions, deducted, savings: contributions - deducted, membershipFees, monthsContributed };
 }
 
 /** Names of the officers who entered rows, keyed by user id. */

@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import { LIVE } from "./ledger";
+import { LIVE, coveredMonths } from "./ledger";
 import { positionsThrough } from "./loans";
 import { dividend, qualifiesForDividend, settle } from "./rules";
 
@@ -13,7 +13,7 @@ export type SettlementRow = {
   memberId: string;
   memberNo: string;
   name: string;
-  phone: string;
+  phone: string | null;
   contributions: bigint;
   months: number;
   qualifies: boolean;
@@ -52,12 +52,14 @@ export async function yearEndPreview(year: { id: string; startDate: Date; endDat
   }
 
   const deducted = new Map(deductRows.map((r) => [r.memberId!, r._sum.amountKobo ?? 0n]));
+  // Months paid for (a payment made ahead counts for every month it covers).
+  const covered = await coveredMonths(year);
 
   const rows: SettlementRow[] = [];
   for (const m of members) {
     const paid = contrib.get(m.id) ?? { total: 0n, months: 0 };
     // Savings already used during the year (a default, or a loan they guaranteed) are not paid twice.
-    const c = { total: paid.total - (deducted.get(m.id) ?? 0n), months: paid.months };
+    const c = { total: paid.total - (deducted.get(m.id) ?? 0n), months: Math.max(covered.get(m.id)?.size ?? 0, paid.months) };
     const pos = positions.get(m.id) ?? { principal: 0n, interestOwed: 0n };
     if (c.total === 0n && pos.principal === 0n && pos.interestOwed === 0n) continue;
     const div = dividend(c.total, rate, c.months);

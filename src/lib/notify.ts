@@ -13,7 +13,8 @@ const MAX_ATTEMPTS = 3;
  * Puts an SMS in the outbox. It is sent right after the page responds (and
  * again by the hourly job if that fails), so no payment ever goes without its message.
  */
-export async function queueSms(to: string, template: string, message: string, tx: Tx | typeof db = db) {
+export async function queueSms(to: string | null, template: string, message: string, tx: Tx | typeof db = db) {
+  if (!to) return; // member without a phone number yet
   await tx.notification.create({ data: { to, channel: "SMS", template, message } });
   kick();
 }

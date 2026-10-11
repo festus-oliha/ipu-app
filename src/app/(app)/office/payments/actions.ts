@@ -32,7 +32,7 @@ function amount(raw: string, field: string, errors: Record<string, string>): big
 export async function recordPayment(_prev: PaymentState, form: FormData): Promise<PaymentState> {
   const officer = await actionUser(...PAYMENT_ROLES);
   const values = Object.fromEntries(
-    ["member", "date", "contribution", "membershipFee", "interestPaid", "loanRepaid", "bankRef", "note"].map((k) => [k, String(form.get(k) ?? "")]),
+    ["member", "date", "contribution", "coversMonths", "membershipFee", "interestPaid", "loanRepaid", "bankRef", "note"].map((k) => [k, String(form.get(k) ?? "")]),
   );
   const errors: Record<string, string> = {};
 
@@ -63,9 +63,16 @@ export async function recordPayment(_prev: PaymentState, form: FormData): Promis
     if (!period) errors.date = "That date is outside the open financial year.";
     else if (period.status !== "OPEN") errors.date = `${monthLabel(period.month)} is closed. Ask the Admin to reopen it.`;
   }
+  // A contribution paid ahead can cover this month and following ones, up to February.
+  const coversMonths = Math.max(1, Math.min(12, Number(values.coversMonths) || 1));
+  if (period && coversMonths > 1) {
+    const monthsLeft = 12 - ((period.month.getUTCMonth() + 10) % 12); // March = 12 left … February = 1
+    if (!contribution) errors.coversMonths = "Enter the contribution that covers these months.";
+    else if (coversMonths > monthsLeft) errors.coversMonths = `Only ${monthsLeft} month${monthsLeft > 1 ? "s" : ""} left in this financial year (to February).`;
+  }
   if (Object.keys(errors).length || !member || !date || !period) return { errors, values };
 
-  const amounts = { contribution, membershipFee, interestPaid, loanRepaid };
+  const amounts = { contribution, membershipFee, interestPaid, loanRepaid, coversMonths };
   const parts = partsList(amounts);
   await db.$transaction((tx) =>
     postMemberPayment({ memberId: member.id, date, periodId: period.id, parts: amounts, bankRef: values.bankRef.trim(), note: values.note.trim(), officerId: officer.id }, tx),
@@ -77,7 +84,7 @@ export async function recordPayment(_prev: PaymentState, form: FormData): Promis
     saved: {
       memberName: member.fullName,
       memberNo: member.memberNo,
-      lines: parts.map((p) => `${ENTRY_LABELS[p.type]}: ${formatNairaSms(p.kobo).replace("N", "₦")}`),
+      lines: parts.map((p) => `${ENTRY_LABELS[p.type]}: ${formatNairaSms(p.kobo).replace("N", "₦")}${p.type === "CONTRIBUTION" && coversMonths > 1 ? `, covering ${coversMonths} months` : ""}`),
       month: monthLabel(period.month),
       date: values.date,
     },

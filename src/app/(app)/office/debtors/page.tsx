@@ -69,7 +69,7 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <Link href={`/office/members/${m.id}`} className="font-display text-xl text-forest">{[m.title, m.fullName].filter(Boolean).join(" ")}</Link>
-                <p className="text-sm text-muted">{m.memberNo} · {displayPhone(m.phone)}{loan ? ` · guarantor ${loan.guarantor.fullName}` : ""}</p>
+                <p className="text-sm text-muted">{m.memberNo} · {displayPhone(m.phone)}{loan ? ` · guarantor ${loan.guarantor?.fullName ?? "verbal (not recorded)"}` : ""}</p>
               </div>
               <div className="flex flex-wrap gap-1.5 text-xs font-semibold">
                 {loan?.status === "DEFAULTED" ? <span className="rounded-full bg-danger/10 px-2.5 py-1 text-danger">In default</span> : null}
@@ -110,7 +110,7 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
                   {loan?.status === "DEFAULTED" && plan ? (
                     <div className="rounded-lg border border-line bg-sand p-4 text-sm">
                       <p className="font-semibold">Recovery from savings{plan.allowedFrom ? `, allowed from ${formatDate(plan.allowedFrom)}` : ""}</p>
-                      <p>From {m.fullName}&apos;s savings: {formatNaira(plan.fromBorrower)} · from guarantor {loan.guarantor.fullName}: {formatNaira(plan.fromGuarantor)}{plan.stillOwed ? ` · still owed after: ${formatNaira(plan.stillOwed)}` : ""}</p>
+                      <p>From {m.fullName}&apos;s savings: {formatNaira(plan.fromBorrower)} · from guarantor {loan.guarantor?.fullName ?? "(none recorded)"}: {formatNaira(plan.fromGuarantor)}{plan.stillOwed ? ` · still owed after: ${formatNaira(plan.stillOwed)}` : ""}</p>
                       {hasRole(user, "TREASURER") ? (
                         <div className="mt-3">
                           <ActionForm action={recoverFromSavings.bind(null, loan.id)} submit="Take from savings now" tone="danger"

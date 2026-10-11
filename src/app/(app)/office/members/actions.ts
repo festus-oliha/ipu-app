@@ -27,19 +27,20 @@ async function phoneTaken(phone: string, exceptMemberId?: string) {
 export async function createMember(_prev: MemberFormState, form: FormData): Promise<MemberFormState> {
   const officer = await actionUser(...MEMBER_ADMIN_ROLES);
   const { errors, values, data } = parseMemberForm(form);
-  if (!errors.phone && (await phoneTaken(data.phone))) errors.phone = "Another member already uses this phone number.";
+  if (!errors.phone && data.phone && (await phoneTaken(data.phone))) errors.phone = "Another member already uses this phone number.";
   if (Object.keys(errors).length) return { errors, values };
 
-  const tempPassword = temporaryPassword();
-  const passwordHash = await hashPassword(tempPassword);
+  // No phone yet: the member is recorded without a login; it is created when the number is added.
+  const tempPassword = data.phone ? temporaryPassword() : undefined;
+  const passwordHash = tempPassword ? await hashPassword(tempPassword) : null;
 
   const member = await db.$transaction(async (tx) => {
     const numbers = await tx.member.findMany({ select: { memberNo: true } });
-    const user = await tx.user.create({
-      data: { phone: data.phone, passwordHash, mustChangePassword: true, roles: { create: [{ role: "MEMBER" }] } },
-    });
+    const user = data.phone && passwordHash
+      ? await tx.user.create({ data: { phone: data.phone, passwordHash, mustChangePassword: true, roles: { create: [{ role: "MEMBER" }] } } })
+      : null;
     const created = await tx.member.create({
-      data: { ...data, memberNo: nextMemberNo(numbers.map((n) => n.memberNo)), userId: user.id },
+      data: { ...data, memberNo: nextMemberNo(numbers.map((n) => n.memberNo)), userId: user?.id ?? null },
     });
     await audit({ userId: officer.id, action: "member.create", table: "Member", recordId: created.id, newValue: created }, tx);
     return created;
@@ -55,17 +56,26 @@ export async function updateMember(memberId: string, _prev: MemberFormState, for
   if (!before) return { error: "This member no longer exists." };
 
   const { errors, values, data } = parseMemberForm(form);
-  if (!errors.phone && data.phone !== before.phone && (await phoneTaken(data.phone, memberId))) {
+  if (!errors.phone && data.phone && data.phone !== before.phone && (await phoneTaken(data.phone, memberId))) {
     errors.phone = "Another member already uses this phone number.";
   }
+  if (!data.phone && before.userId) errors.phone = "This member signs in with their phone number, so it cannot be removed.";
   if (Object.keys(errors).length) return { errors, values };
 
+  // Phone added for a member who had none: create their login now.
+  const tempPassword = data.phone && !before.userId ? temporaryPassword() : undefined;
+  const passwordHash = tempPassword ? await hashPassword(tempPassword) : null;
+
   const after = await db.$transaction(async (tx) => {
+    if (data.phone && passwordHash) {
+      const user = await tx.user.create({ data: { phone: data.phone, passwordHash, mustChangePassword: true, roles: { create: [{ role: "MEMBER" }] } } });
+      await tx.member.update({ where: { id: memberId }, data: { userId: user.id } });
+    }
     const updated = await tx.member.update({
       where: { id: memberId },
       data: { ...data, exitedAt: data.status === "EXITED" ? (before.exitedAt ?? new Date()) : null },
     });
-    if (before.userId && data.phone !== before.phone) {
+    if (before.userId && data.phone && data.phone !== before.phone) {
       await tx.user.update({ where: { id: before.userId }, data: { phone: data.phone } });
     }
     await audit({ userId: officer.id, action: "member.update", table: "Member", recordId: memberId, oldValue: before, newValue: updated }, tx);
@@ -74,7 +84,7 @@ export async function updateMember(memberId: string, _prev: MemberFormState, for
 
   revalidatePath("/office/members");
   revalidatePath(`/office/members/${memberId}`);
-  return { saved: { memberId, memberNo: after.memberNo, fullName: after.fullName } };
+  return { saved: { memberId, memberNo: after.memberNo, fullName: after.fullName, tempPassword } };
 }
 
 export type ResetState = { tempPassword?: string; error?: string };
@@ -83,6 +93,8 @@ export async function resetMemberPassword(memberId: string): Promise<ResetState>
   const officer = await actionUser(...MEMBER_ADMIN_ROLES);
   const member = await db.member.findUnique({ where: { id: memberId } });
   if (!member) return { error: "This member no longer exists." };
+  if (!member.userId && !member.phone) return { error: "Add the member's phone number first (Edit details); the login uses it." };
+  const phone = member.phone;
 
   const tempPassword = temporaryPassword();
   const passwordHash = await hashPassword(tempPassword);
@@ -96,7 +108,7 @@ export async function resetMemberPassword(memberId: string): Promise<ResetState>
       });
     } else {
       const user = await tx.user.create({
-        data: { phone: member.phone, passwordHash, mustChangePassword: true, roles: { create: [{ role: "MEMBER" }] } },
+        data: { phone: phone!, passwordHash, mustChangePassword: true, roles: { create: [{ role: "MEMBER" }] } },
       });
       userId = user.id;
       await tx.member.update({ where: { id: member.id }, data: { userId } });

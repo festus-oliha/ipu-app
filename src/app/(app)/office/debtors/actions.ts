@@ -54,10 +54,13 @@ export async function declareDefault(loanId: string, _prev: FormResult, form: Fo
   await db.$transaction(async (tx) => {
     await tx.loan.update({ where: { id: loan.id }, data: { status: "DEFAULTED" } });
     await audit({ userId: user.id, action: "loan.default", table: "Loan", recordId: loan.id, reason, newValue: { owed: owedOf(p) } }, tx);
-    await tx.contactLog.create({ data: { memberId: loan.guarantorId, channel: "SMS", outcome: `Default notice for ${loan.borrower.fullName}'s loan`, byId: user.id } });
-    const gText = `IPU: ${loan.borrower.fullName}'s loan, which you guarantee, is in default. Owed: ${formatNairaSms(owedOf(p))}. From ${formatDate(from)} it will be recovered from the borrower's savings, then yours. Please contact the Treasurer.`;
-    await queueSms(loan.guarantor.phone, "default.guarantor", gText, tx);
-    if (loan.guarantor.email) await queueEmail(loan.guarantor.email, "default.guarantor", "Loan you guarantee is in default", gText, tx);
+    // A verbal (unrecorded) guarantee from the workbook has nobody to notify or recover from.
+    if (loan.guarantor) {
+      await tx.contactLog.create({ data: { memberId: loan.guarantor.id, channel: "SMS", outcome: `Default notice for ${loan.borrower.fullName}'s loan`, byId: user.id } });
+      const gText = `IPU: ${loan.borrower.fullName}'s loan, which you guarantee, is in default. Owed: ${formatNairaSms(owedOf(p))}. From ${formatDate(from)} it will be recovered from the borrower's savings, then yours. Please contact the Treasurer.`;
+      await queueSms(loan.guarantor.phone, "default.guarantor", gText, tx);
+      if (loan.guarantor.email) await queueEmail(loan.guarantor.email, "default.guarantor", "Loan you guarantee is in default", gText, tx);
+    }
     await queueSms(loan.borrower.phone, "default.borrower", `IPU: Your loan is in default. You owe ${formatNairaSms(owedOf(p))}. From ${formatDate(from)} it will be taken from your savings, then your guarantor's. Pay now to avoid this.`, tx);
   });
   refresh();
@@ -69,7 +72,7 @@ export async function recoverFromSavings(loanId: string, _prev: FormResult, form
   const user = await actionUser("TREASURER");
   const plan = await recoveryPlan(loanId);
   if (!plan || plan.loan.status !== "DEFAULTED") return { error: "This loan is not in default." };
-  if (plan.loan.borrower.userId === user.id || plan.loan.guarantor.userId === user.id) return { error: "Another officer must do this; it involves your own savings." };
+  if (plan.loan.borrower.userId === user.id || plan.loan.guarantor?.userId === user.id) return { error: "Another officer must do this; it involves your own savings." };
   if (!plan.allowedFrom || new Date() < plan.allowedFrom) return { error: `The guarantor's notice runs until ${plan.allowedFrom ? formatDate(plan.allowedFrom) : "?"}.` };
   if (plan.fromBorrower + plan.fromGuarantor === 0n) return { error: "There are no savings to recover from." };
   if (form.get("confirm") !== "yes") return { errors: { confirm: "Tick to confirm." } };
@@ -82,19 +85,19 @@ export async function recoverFromSavings(loanId: string, _prev: FormResult, form
   const total = plan.fromBorrower + plan.fromGuarantor;
   const interestPart = position.interestOwed > 0n ? (position.interestOwed < total ? position.interestOwed : total) : 0n;
   const loanPart = total - interestPart;
-  const note = `Default recovery: ${formatNaira(plan.fromBorrower)} from borrower's savings, ${formatNaira(plan.fromGuarantor)} from guarantor ${loan.guarantor.fullName}`;
+  const note = `Default recovery: ${formatNaira(plan.fromBorrower)} from borrower's savings, ${formatNaira(plan.fromGuarantor)} from guarantor ${loan.guarantor?.fullName ?? "(none recorded)"}`;
 
   await db.$transaction(async (tx) => {
     const row = (memberId: string, type: "DEDUCTION" | "INTEREST_DEDUCTED" | "LOAN_DEDUCTED", amountKobo: bigint, n: string) =>
       amountKobo > 0n ? tx.ledgerEntry.create({ data: { date, periodId: period.id, memberId, loanId: loan.id, type, amountKobo, note: n, enteredById: user.id } }) : null;
     await row(loan.borrowerId, "DEDUCTION", plan.fromBorrower, note);
-    await row(loan.guarantorId, "DEDUCTION", plan.fromGuarantor, `Guarantor for ${loan.borrower.fullName}: savings used to repay the loan`);
+    if (loan.guarantorId) await row(loan.guarantorId, "DEDUCTION", plan.fromGuarantor, `Guarantor for ${loan.borrower.fullName}: savings used to repay the loan`);
     await row(loan.borrowerId, "INTEREST_DEDUCTED", interestPart, note);
     await row(loan.borrowerId, "LOAN_DEDUCTED", loanPart, note);
     await closeLoansIfCleared(loan.borrowerId, tx);
     await audit({ userId: user.id, action: "loan.recover", table: "Loan", recordId: loan.id, newValue: { fromBorrower: plan.fromBorrower, fromGuarantor: plan.fromGuarantor, stillOwed: plan.stillOwed } }, tx);
     await queueSms(loan.borrower.phone, "default.recovered", `IPU: ${formatNairaSms(total)} has been taken from savings to repay your loan${plan.stillOwed > 0n ? `. You still owe ${formatNairaSms(plan.stillOwed)}` : ""}.`, tx);
-    if (plan.fromGuarantor > 0n) await queueSms(loan.guarantor.phone, "default.recovered_guarantor", `IPU: ${formatNairaSms(plan.fromGuarantor)} of your savings was used for ${loan.borrower.fullName}'s loan, which you guaranteed.`, tx);
+    if (plan.fromGuarantor > 0n && loan.guarantor) await queueSms(loan.guarantor.phone, "default.recovered_guarantor", `IPU: ${formatNairaSms(plan.fromGuarantor)} of your savings was used for ${loan.borrower.fullName}'s loan, which you guaranteed.`, tx);
   });
   refresh();
   return { done: `Recovered ${formatNaira(total)}.${plan.stillOwed > 0n ? ` Still owed: ${formatNaira(plan.stillOwed)}.` : " The loan is cleared."}` };

@@ -10,7 +10,7 @@ import type { LoanPosition } from "./position";
 
 type Tx = Prisma.TransactionClient;
 
-export type PaymentParts = { contribution: bigint; membershipFee: bigint; interestPaid: bigint; loanRepaid: bigint };
+export type PaymentParts = { contribution: bigint; membershipFee: bigint; interestPaid: bigint; loanRepaid: bigint; coversMonths?: number };
 
 export function partsList(p: PaymentParts) {
   return [
@@ -60,6 +60,7 @@ export async function postMemberPayment(
         bankRef: input.bankRef || null,
         note: input.note || null,
         receiptId: input.receiptId,
+        coversMonths: p.type === "CONTRIBUTION" && (input.parts.coversMonths ?? 1) > 1 ? input.parts.coversMonths : null,
         enteredById: input.officerId,
       },
     });
@@ -69,10 +70,12 @@ export async function postMemberPayment(
 }
 
 /** The "payment received" SMS with new savings and loan balance. */
-export async function paymentSms(member: { id: string; phone: string }, year: { id: string }, date: Date, parts: PaymentParts) {
+export async function paymentSms(member: { id: string; phone: string | null }, year: { id: string }, date: Date, parts: PaymentParts) {
   const totals = await memberYearTotals(member.id, year);
   const after = await memberPosition(member.id);
-  const what = partsList(parts).map((p) => `${formatNairaSms(p.kobo)} ${ENTRY_LABELS[p.type].toLowerCase()}`).join(" + ");
+  const what = partsList(parts)
+    .map((p) => `${formatNairaSms(p.kobo)} ${ENTRY_LABELS[p.type].toLowerCase()}${p.type === "CONTRIBUTION" && (parts.coversMonths ?? 1) > 1 ? ` (${parts.coversMonths} months)` : ""}`)
+    .join(" + ");
   const loanText =
     after.principal > 0n
       ? ` Loan balance: ${formatNairaSms(after.principal)}.`

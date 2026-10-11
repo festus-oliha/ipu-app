@@ -22,8 +22,9 @@ export function parseMemberForm(form: FormData) {
   const fullName = raw.fullName.trim();
   if (fullName.length < 3) errors.fullName = "Enter the member's full name.";
 
-  const phone = normalizePhone(raw.phone);
-  if (!phone) errors.phone = "Enter a Nigerian phone number, e.g. 0803 445 3367.";
+  // A member can be added before their phone number is known; they get a login once it is entered.
+  const phone = raw.phone.trim() ? normalizePhone(raw.phone) : null;
+  if (raw.phone.trim() && !phone) errors.phone = "Enter a Nigerian phone number, e.g. 0803 445 3367, or leave it empty for now.";
 
   const emergencyPhoneRaw = raw.emergencyPhone.trim();
   const emergencyPhone = emergencyPhoneRaw ? normalizePhone(emergencyPhoneRaw) : null;
@@ -60,7 +61,7 @@ export function parseMemberForm(form: FormData) {
     data: {
       title: title || null,
       fullName,
-      phone: phone ?? "",
+      phone,
       email: optional.parse(email),
       occupation: optional.parse(raw.occupation),
       address: optional.parse(raw.address),

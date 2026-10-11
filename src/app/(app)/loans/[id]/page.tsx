@@ -73,7 +73,7 @@ export default async function LoanPage({ params }: { params: Promise<{ id: strin
     <div className="flex flex-col gap-6">
       <PageHeader eyebrow={`Loan · ${LOAN_STATUS_LABELS[loan.status]}`} title={`${formatNaira(loan.amountKobo, { compact: true })} for ${name(loan.borrower)}`} />
       <p className="-mt-3 text-sm text-muted">
-        {loan.borrower.memberNo} · Guarantor: {name(loan.guarantor)} ({loan.guarantor.memberNo}) · For: {loan.purpose}
+        {loan.borrower.memberNo} · Guarantor: {loan.guarantor ? `${name(loan.guarantor)} (${loan.guarantor.memberNo})` : "verbal agreement (not recorded)"} · For: {loan.purpose}
       </p>
 
       {loan.isException ? (

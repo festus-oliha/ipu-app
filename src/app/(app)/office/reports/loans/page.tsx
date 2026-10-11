@@ -47,7 +47,7 @@ export default async function LoanBookPage({ searchParams }: { searchParams: Pro
                 return (
                   <tr key={l.id} className="border-t border-line">
                     <td className="px-2 py-1.5">{l.borrower.memberNo} {l.borrower.fullName}{l.isException ? " (exception)" : ""}</td>
-                    <td className="px-2 py-1.5">{l.guarantor.fullName}</td>
+                    <td className="px-2 py-1.5">{l.guarantor?.fullName ?? "Verbal (not recorded)"}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{formatNaira(l.amountKobo, { compact: true })}</td>
                     <td className="px-2 py-1.5 text-right">{l.disbursedOn ? formatDate(l.disbursedOn) : ""}</td>
                     <td className="px-2 py-1.5 text-right">{LOAN_STATUS_LABELS[l.status]}</td>

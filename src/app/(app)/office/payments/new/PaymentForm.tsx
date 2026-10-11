@@ -85,7 +85,7 @@ function Fields({ members, today, values, errors }: { members: MemberOption[]; t
           <p id="member-error" className="text-sm text-danger">{errors.member}</p>
         ) : (
           <p id="member-hint" className="text-xs text-muted">
-            {usual ? `Usual monthly contribution: ${usual}` : "Start typing, then pick from the list."}
+            {usual ? `Usual monthly contribution: ${usual} (members may pay more or less)` : "Start typing, then pick from the list."}
             {chosen?.loan ? <span className="block font-semibold text-ink">{chosen.loan}</span> : null}
           </p>
         )}
@@ -95,6 +95,14 @@ function Fields({ members, today, values, errors }: { members: MemberOption[]; t
         {field("date", "Date paid into the bank", { type: "date", max: today })}
         {field("bankRef", "Bank or transfer reference (optional)", { autoComplete: "off" })}
         {field("contribution", "Contribution (₦)", { inputMode: "decimal", placeholder: "10,000" })}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="coversMonths" className="text-sm font-semibold">Contribution covers</label>
+          <select id="coversMonths" name="coversMonths" defaultValue={values.coversMonths ?? "1"} aria-invalid={errors.coversMonths ? true : undefined} className={input}>
+            <option value="1">This month only</option>
+            {Array.from({ length: 11 }, (_, i) => i + 2).map((n) => <option key={n} value={n}>{n} months, paid ahead</option>)}
+          </select>
+          {errors.coversMonths ? <p id="coversMonths-error" className="text-sm text-danger">{errors.coversMonths}</p> : <p className="text-xs text-muted">E.g. ₦60,000 for 4 months at ₦15,000.</p>}
+        </div>
         {field("membershipFee", "Membership fee (₦)", { inputMode: "decimal", placeholder: "0" }, "Only when a new member pays the joining fee.")}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">

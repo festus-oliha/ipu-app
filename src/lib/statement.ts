@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import { LIVE } from "./ledger";
+import { LIVE, coveredMonths } from "./ledger";
 import { positionFromRows } from "./position";
 
 export type StatementMonth = {
@@ -16,6 +16,7 @@ export type StatementMonth = {
   savingsToDate: bigint;
   loanBalance: bigint;
   interestOwed: bigint;
+  paidAhead: boolean;
 };
 
 /** A member's year, month by month — the paper statement. */
@@ -26,6 +27,7 @@ export async function memberStatement(memberId: string, year: { id: string; star
     // loan account brought forward from earlier years
     db.ledgerEntry.findMany({ where: { ...LIVE, memberId, period: { month: { lt: year.startDate } } }, select: { type: true, amountKobo: true } }),
   ]);
+  const covered = (await coveredMonths(year, memberId)).get(memberId) ?? new Set<string>();
   let running = positionFromRows(before);
   const broughtForward = running;
   let savings = 0n;
@@ -48,6 +50,7 @@ export async function memberStatement(memberId: string, year: { id: string; star
       savingsToDate: savings,
       loanBalance: running.principal,
       interestOwed: running.interestOwed,
+      paidAhead: sum("CONTRIBUTION") === 0n && covered.has(p.month.toISOString().slice(0, 7)),
     };
   });
   const total = (k: keyof StatementMonth) => months.reduce((t, m) => t + (m[k] as bigint), 0n);

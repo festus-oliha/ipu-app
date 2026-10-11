@@ -44,7 +44,7 @@ export default async function LoansPage() {
                       <span className="min-w-0">
                         <span className="block text-sm font-semibold text-forest">{[l.borrower.title, l.borrower.fullName].filter(Boolean).join(" ")}</span>
                         <span className="block text-xs text-muted">
-                          {l.borrower.memberNo} · Guarantor {l.guarantor.fullName} · {formatDate(l.disbursedOn ?? l.createdAt)}
+                          {l.borrower.memberNo} · Guarantor {l.guarantor?.fullName ?? "verbal"} · {formatDate(l.disbursedOn ?? l.createdAt)}
                           {l.isException ? " · Exception" : ""}
                           {g.statuses.length > 1 ? ` · ${LOAN_STATUS_LABELS[l.status]}` : ""}
                         </span>

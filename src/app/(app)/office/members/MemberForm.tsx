@@ -42,8 +42,14 @@ export function MemberForm({ action, initial, mode }: { action: Action; initial:
       <div className="flex flex-col gap-4">
         <Notice tone="success">
           <p className="font-semibold">{state.saved.fullName} is now member {state.saved.memberNo}.</p>
-          <p className="mt-2">Their login: their phone number, with this temporary password (shown only once):</p>
-          <p className="mt-2 font-mono text-2xl tracking-wider">{state.saved.tempPassword}</p>
+          {state.saved.tempPassword ? (
+            <>
+              <p className="mt-2">Their login: their phone number, with this temporary password (shown only once):</p>
+              <p className="mt-2 font-mono text-2xl tracking-wider">{state.saved.tempPassword}</p>
+            </>
+          ) : (
+            <p className="mt-2">No phone number yet, so no login. Add the number later under Edit details; the temporary password is shown then.</p>
+          )}
           <p className="mt-2">They will be asked to choose their own password the first time they sign in.</p>
         </Notice>
         <div className="flex flex-wrap gap-2">
@@ -64,7 +70,14 @@ export function MemberForm({ action, initial, mode }: { action: Action; initial:
 
   return (
     <form action={formAction} className="flex flex-col gap-6" noValidate>
-      {mode === "edit" && state.saved ? <Notice tone="success">Changes saved.</Notice> : null}
+      {mode === "edit" && state.saved ? (
+        <Notice tone="success">
+          Changes saved.
+          {state.saved.tempPassword ? (
+            <> A login was created with the new phone number. Temporary password (shown only once): <span className="font-mono text-lg font-semibold">{state.saved.tempPassword}</span></>
+          ) : null}
+        </Notice>
+      ) : null}
       {errors && Object.keys(errors).length ? (
         <Notice tone="warning">Please correct the {Object.keys(errors).length === 1 ? "field" : "fields"} marked in red.</Notice>
       ) : null}
@@ -82,7 +95,7 @@ export function MemberForm({ action, initial, mode }: { action: Action; initial:
 
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-3 font-display text-lg text-forest">Contact</legend>
-        <F name="phone" label="Phone number (used to sign in)" values={values} errors={errors} type="tel" inputMode="tel" placeholder="0803 445 3367" required />
+        <F name="phone" label="Phone number (used to sign in; leave empty if not known yet)" values={values} errors={errors} type="tel" inputMode="tel" placeholder="0803 445 3367" />
         <F name="email" label="Email (optional)" values={values} errors={errors} type="email" />
         <F name="occupation" label="Trade or occupation" values={values} errors={errors} />
         <F name="address" label="Home or shop address" values={values} errors={errors} />

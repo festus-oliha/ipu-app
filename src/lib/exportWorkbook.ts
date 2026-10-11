@@ -90,7 +90,7 @@ export async function buildBackupWorkbook() {
     { header: "Borrower", key: "b", width: 28 }, { header: "Guarantor", key: "g", width: 28 }, { header: "Amount", key: "amt", money: true },
     { header: "Purpose", key: "purpose", width: 26 }, { header: "Status", key: "status", width: 14 }, { header: "Exception", key: "ex", width: 10 }, { header: "Paid out", key: "out", width: 12 },
   ]);
-  for (const x of loans) lo.addRow({ b: `${x.borrower.memberNo} ${x.borrower.fullName}`, g: `${x.guarantor.memberNo} ${x.guarantor.fullName}`, amt: naira(x.amountKobo), purpose: x.purpose, status: x.status, ex: x.isException ? "yes" : "", out: x.disbursedOn });
+  for (const x of loans) lo.addRow({ b: `${x.borrower.memberNo} ${x.borrower.fullName}`, g: x.guarantor ? `${x.guarantor.memberNo} ${x.guarantor.fullName}` : "Verbal (not recorded)", amt: naira(x.amountKobo), purpose: x.purpose, status: x.status, ex: x.isException ? "yes" : "", out: x.disbursedOn });
 
   const s = sheet(wb, "Settlements", [
     { header: "Year", key: "y", width: 12 }, { header: "Member", key: "m", width: 28 }, { header: "Savings", key: "c", money: true }, { header: "Months", key: "mo", width: 8 },

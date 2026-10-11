@@ -119,8 +119,8 @@ export async function guarantorDecision(loanId: string, _prev: StepState, form: 
       loan.borrower.phone,
       "loan.guarantor_answer",
       accept
-        ? `IPU: ${loan.guarantor.fullName} has agreed to guarantee your loan request of ${formatNairaSms(loan.amountKobo)}. It now goes to the President.`
-        : `IPU: ${loan.guarantor.fullName} declined to guarantee your loan request. You may ask another member.`,
+        ? `IPU: ${loan.guarantor?.fullName ?? "Your guarantor"} has agreed to guarantee your loan request of ${formatNairaSms(loan.amountKobo)}. It now goes to the President.`
+        : `IPU: ${loan.guarantor?.fullName ?? "Your guarantor"} declined to guarantee your loan request. You may ask another member.`,
       tx,
     );
   });
@@ -157,7 +157,7 @@ async function approvalStep(loanId: string, form: FormData, step: "PRESIDENT" | 
       await tx.loanApproval.create({ data: { loanId, step: "EXCEPTION", decision: "APPROVED", reason, byId: user.id } });
       await tx.loan.update({ where: { id: loanId }, data: { exceptionReason: reason, guarantorToldAt: new Date() } });
       await queueSms(
-        loan.guarantor.phone,
+        loan.guarantor?.phone ?? null,
         "loan.exception_guarantor",
         `IPU: The loan of ${formatNairaSms(loan.amountKobo)} to ${loan.borrower.fullName}, which you guarantee, is above their usual limit and was approved as an exception.`,
         tx,
@@ -218,7 +218,7 @@ export async function disburseLoan(loanId: string, _prev: StepState, form: FormD
       tx,
     );
     await queueSms(
-      loan.guarantor.phone,
+      loan.guarantor?.phone ?? null,
       "loan.disbursed_guarantor",
       `IPU: The loan of ${formatNairaSms(loan.amountKobo)} to ${loan.borrower.fullName}, which you guarantee, was paid out on ${formatDate(date)}.`,
       tx,

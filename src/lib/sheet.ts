@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import { BANK_EFFECT, LIVE } from "./ledger";
+import { BANK_EFFECT, LIVE, coveredMonths } from "./ledger";
 import { positionsThrough } from "./loans";
 
 export type SheetRow = {
@@ -19,6 +19,10 @@ export type SheetRow = {
   interestOwed: bigint;
   savingsToDate: bigint;
   monthsToDate: number;
+  /** This month is already paid for by a contribution made ahead in an earlier month. */
+  paidAhead: boolean;
+  /** A contribution this month covers this many months (paid ahead). */
+  coversMonths: number;
 };
 
 const ZERO = { contribution: 0n, membershipFee: 0n, loanGiven: 0n, interestPaid: 0n, loanRepaid: 0n };
@@ -35,7 +39,8 @@ const FIELD: Record<string, keyof typeof ZERO> = {
  * one row per active member, plus anyone with money or a loan in that month.
  */
 export async function buildMonthSheet(period: { id: string; yearId: string; month: Date }) {
-  const [monthRows, ytdRows, members, bankRows, positions] = await Promise.all([
+  const thisKey = period.month.toISOString().slice(0, 7);
+  const [monthRows, ytdRows, members, bankRows, positions, covered, batches] = await Promise.all([
     db.ledgerEntry.groupBy({
       by: ["memberId", "type"],
       where: { ...LIVE, periodId: period.id, memberId: { not: null } },
@@ -49,7 +54,10 @@ export async function buildMonthSheet(period: { id: string; yearId: string; mont
     db.member.findMany({ orderBy: { memberNo: "asc" } }),
     db.ledgerEntry.groupBy({ by: ["type"], where: { ...LIVE, periodId: period.id }, _sum: { amountKobo: true } }),
     positionsThrough(period.month),
+    coveredMonths({ id: period.yearId }),
+    db.ledgerEntry.groupBy({ by: ["memberId"], where: { ...LIVE, periodId: period.id, type: "CONTRIBUTION", coversMonths: { gt: 1 } }, _max: { coversMonths: true } }),
   ]);
+  const batchBy = new Map(batches.map((b) => [b.memberId!, b._max.coversMonths ?? 1]));
 
   const month = new Map<string, typeof ZERO>();
   for (const r of monthRows) {
@@ -81,7 +89,9 @@ export async function buildMonthSheet(period: { id: string; yearId: string; mont
         loanBalance: pos.principal,
         interestOwed: pos.interestOwed,
         savingsToDate: ytd.get(m.id)?.savings ?? 0n,
-        monthsToDate: ytd.get(m.id)?.months ?? 0,
+        monthsToDate: Math.max(ytd.get(m.id)?.months ?? 0, [...(covered.get(m.id) ?? [])].filter((k) => k <= thisKey).length),
+        paidAhead: !(month.get(m.id)?.contribution) && (covered.get(m.id)?.has(thisKey) ?? false),
+        coversMonths: batchBy.get(m.id) ?? 1,
       };
     });
 
@@ -103,7 +113,7 @@ export async function buildMonthSheet(period: { id: string; yearId: string; mont
       loanBalance: t.loanBalance + r.loanBalance,
       interestOwed: t.interestOwed + r.interestOwed,
       savingsToDate: t.savingsToDate + r.savingsToDate,
-      paid: t.paid + (r.contribution > 0n ? 1 : 0),
+      paid: t.paid + (r.contribution > 0n || r.paidAhead ? 1 : 0),
     }),
     { ...ZERO, loanBalance: 0n, interestOwed: 0n, savingsToDate: 0n, paid: 0 },
   );
