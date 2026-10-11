@@ -22,7 +22,7 @@ export function LoginForm() {
       <FormError message={state.error} />
       <SubmitButton pending={pending}>Sign in</SubmitButton>
       <p className="text-center text-sm text-muted">
-        Forgot your password? Ask the Secretary to reset it.
+        Forgot your password? Ask the Admin or Secretary to reset it.
       </p>
     </form>
   );
