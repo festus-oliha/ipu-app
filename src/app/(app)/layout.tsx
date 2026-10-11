@@ -12,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const items: NavItem[] = [{ href: "/", label: "Home" }];
   if (hasRole(user, ...OFFICER_ROLES)) items.push({ href: "/office/sheet", label: "Monthly sheet" });
   if (hasRole(user, ...PAYMENT_ROLES)) items.push({ href: "/office/payments/new", label: "Record payment" });
+  if (hasRole(user, ...OFFICER_ROLES)) items.push({ href: "/office/loans", label: "Loans" });
   if (hasRole(user, ...OFFICER_ROLES)) items.push({ href: "/office/members", label: "Members" });
 
   return (

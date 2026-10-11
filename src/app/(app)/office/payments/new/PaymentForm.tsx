@@ -8,7 +8,7 @@ import { recordPayment, type PaymentState } from "../actions";
 const input =
   "h-12 w-full rounded-lg border border-line bg-ivory px-3 text-base text-ink focus:border-forest aria-[invalid=true]:border-danger";
 
-type MemberOption = { label: string; usual: string };
+type MemberOption = { label: string; usual: string; loan?: string };
 type Values = Record<string, string>;
 
 export function PaymentForm({ members, today, preselect }: { members: MemberOption[]; today: string; preselect?: string }) {
@@ -43,7 +43,8 @@ export function PaymentForm({ members, today, preselect }: { members: MemberOpti
 
 function Fields({ members, today, values, errors }: { members: MemberOption[]; today: string; values: Values; errors: Record<string, string> }) {
   const [member, setMember] = useState(values.member ?? "");
-  const usual = members.find((m) => m.label === member)?.usual;
+  const chosen = members.find((m) => m.label === member);
+  const usual = chosen?.usual;
 
   const field = (name: string, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}, hint?: string) => (
     <div className="flex flex-col gap-1.5">
@@ -83,7 +84,10 @@ function Fields({ members, today, values, errors }: { members: MemberOption[]; t
         {errors.member ? (
           <p id="member-error" className="text-sm text-danger">{errors.member}</p>
         ) : (
-          <p id="member-hint" className="text-xs text-muted">{usual ? `Usual monthly contribution: ${usual}` : "Start typing, then pick from the list."}</p>
+          <p id="member-hint" className="text-xs text-muted">
+            {usual ? `Usual monthly contribution: ${usual}` : "Start typing, then pick from the list."}
+            {chosen?.loan ? <span className="block font-semibold text-ink">{chosen.loan}</span> : null}
+          </p>
         )}
       </div>
 
@@ -93,9 +97,11 @@ function Fields({ members, today, values, errors }: { members: MemberOption[]; t
         {field("contribution", "Contribution (₦)", { inputMode: "decimal", placeholder: "10,000" })}
         {field("membershipFee", "Membership fee (₦)", { inputMode: "decimal", placeholder: "0" }, "Only when a new member pays the joining fee.")}
       </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {field("interestPaid", "Loan interest paid (₦)", { inputMode: "decimal", placeholder: "0" }, "Paying more than is due is kept as a credit.")}
+        {field("loanRepaid", "Loan repaid (₦)", { inputMode: "decimal", placeholder: "0" }, "Any amount, any time.")}
+      </div>
       {field("note", "Note (optional)", { autoComplete: "off" })}
-
-      <Notice>Loan interest and loan repayments will be recorded here once loans are added (phase 3).</Notice>
     </>
   );
 }

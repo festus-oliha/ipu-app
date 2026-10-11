@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "./db";
 import { BANK_EFFECT, LIVE } from "./ledger";
+import { positionsThrough } from "./loans";
 
 export type SheetRow = {
   memberId: string;
@@ -9,16 +10,32 @@ export type SheetRow = {
   status: string;
   contribution: bigint;
   membershipFee: bigint;
+  loanGiven: bigint;
+  interestPaid: bigint;
+  loanRepaid: bigint;
+  /** Workbook column J: loan balance at the end of the month. */
+  loanBalance: bigint;
+  /** Workbook column K: interest due by the 15th of next month (after close; > 0 owed, < 0 credit). */
+  interestOwed: bigint;
   savingsToDate: bigint;
   monthsToDate: number;
 };
 
+const ZERO = { contribution: 0n, membershipFee: 0n, loanGiven: 0n, interestPaid: 0n, loanRepaid: 0n };
+const FIELD: Record<string, keyof typeof ZERO> = {
+  CONTRIBUTION: "contribution",
+  MEMBERSHIP_FEE: "membershipFee",
+  LOAN_GIVEN: "loanGiven",
+  INTEREST_PAID: "interestPaid",
+  LOAN_REPAID: "loanRepaid",
+};
+
 /**
  * The month sheet (the workbook's March … February tabs) built from the ledger:
- * one row per active member, plus anyone who has money in that month.
+ * one row per active member, plus anyone with money or a loan in that month.
  */
 export async function buildMonthSheet(period: { id: string; yearId: string; month: Date }) {
-  const [monthRows, ytdRows, members, bankRows] = await Promise.all([
+  const [monthRows, ytdRows, members, bankRows, positions] = await Promise.all([
     db.ledgerEntry.groupBy({
       by: ["memberId", "type"],
       where: { ...LIVE, periodId: period.id, memberId: { not: null } },
@@ -31,13 +48,15 @@ export async function buildMonthSheet(period: { id: string; yearId: string; mont
     }),
     db.member.findMany({ orderBy: { memberNo: "asc" } }),
     db.ledgerEntry.groupBy({ by: ["type"], where: { ...LIVE, periodId: period.id }, _sum: { amountKobo: true } }),
+    positionsThrough(period.month),
   ]);
 
-  const month = new Map<string, { contribution: bigint; membershipFee: bigint }>();
+  const month = new Map<string, typeof ZERO>();
   for (const r of monthRows) {
-    const m = month.get(r.memberId!) ?? { contribution: 0n, membershipFee: 0n };
-    if (r.type === "CONTRIBUTION") m.contribution += r._sum.amountKobo ?? 0n;
-    if (r.type === "MEMBERSHIP_FEE") m.membershipFee += r._sum.amountKobo ?? 0n;
+    const field = FIELD[r.type];
+    if (!field) continue;
+    const m = month.get(r.memberId!) ?? { ...ZERO };
+    m[field] += r._sum.amountKobo ?? 0n;
     month.set(r.memberId!, m);
   }
   const ytd = new Map<string, { savings: bigint; months: number }>();
@@ -50,17 +69,21 @@ export async function buildMonthSheet(period: { id: string; yearId: string; mont
   }
 
   const rows: SheetRow[] = members
-    .filter((m) => m.status === "ACTIVE" || month.has(m.id))
-    .map((m) => ({
-      memberId: m.id,
-      memberNo: m.memberNo,
-      name: [m.title, m.fullName].filter(Boolean).join(" "),
-      status: m.status,
-      contribution: month.get(m.id)?.contribution ?? 0n,
-      membershipFee: month.get(m.id)?.membershipFee ?? 0n,
-      savingsToDate: ytd.get(m.id)?.savings ?? 0n,
-      monthsToDate: ytd.get(m.id)?.months ?? 0,
-    }));
+    .filter((m) => m.status === "ACTIVE" || month.has(m.id) || (positions.get(m.id)?.principal ?? 0n) > 0n)
+    .map((m) => {
+      const pos = positions.get(m.id) ?? { principal: 0n, interestOwed: 0n };
+      return {
+        memberId: m.id,
+        memberNo: m.memberNo,
+        name: [m.title, m.fullName].filter(Boolean).join(" "),
+        status: m.status,
+        ...(month.get(m.id) ?? ZERO),
+        loanBalance: pos.principal,
+        interestOwed: pos.interestOwed,
+        savingsToDate: ytd.get(m.id)?.savings ?? 0n,
+        monthsToDate: ytd.get(m.id)?.months ?? 0,
+      };
+    });
 
   let bankIn = 0n;
   let bankOut = 0n;
@@ -74,10 +97,15 @@ export async function buildMonthSheet(period: { id: string; yearId: string; mont
     (t, r) => ({
       contribution: t.contribution + r.contribution,
       membershipFee: t.membershipFee + r.membershipFee,
+      loanGiven: t.loanGiven + r.loanGiven,
+      interestPaid: t.interestPaid + r.interestPaid,
+      loanRepaid: t.loanRepaid + r.loanRepaid,
+      loanBalance: t.loanBalance + r.loanBalance,
+      interestOwed: t.interestOwed + r.interestOwed,
       savingsToDate: t.savingsToDate + r.savingsToDate,
       paid: t.paid + (r.contribution > 0n ? 1 : 0),
     }),
-    { contribution: 0n, membershipFee: 0n, savingsToDate: 0n, paid: 0 },
+    { ...ZERO, loanBalance: 0n, interestOwed: 0n, savingsToDate: 0n, paid: 0 },
   );
 
   return { rows, totals, bankIn, bankOut, activeMembers: members.filter((m) => m.status === "ACTIVE").length };
