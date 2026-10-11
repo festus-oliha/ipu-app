@@ -1,0 +1,440 @@
+// IPU Contribution & Loan App — database schema
+// Follows the approved System Design (section 3, Data model).
+//
+// Money rule: every amount is stored in KOBO (₦1 = 100 kobo) as a BigInt.
+// Never store naira as a decimal or float.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────── Enums ─────────────────────────
+
+enum Role {
+  ADMIN
+  PRESIDENT
+  TREASURER
+  SECRETARY
+  AUDITOR
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  SUSPENDED
+  EXITED
+}
+
+enum YearStatus {
+  OPEN
+  CLOSING
+  CLOSED
+}
+
+enum PeriodStatus {
+  OPEN
+  READY
+  SIGNED
+  LOCKED
+}
+
+enum EntryType {
+  CONTRIBUTION
+  MEMBERSHIP_FEE
+  INTEREST_PAID
+  LOAN_REPAID
+  OTHER_INCOME
+  INVESTMENT_RETURNED
+  LOAN_GIVEN
+  INVESTMENT_PLACED
+  EXPENSE
+  PAYOUT
+  INTEREST_CHARGED
+  DEDUCTION
+  REVERSAL
+}
+
+enum ReceiptStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+enum LoanStatus {
+  REQUESTED
+  GUARANTOR_ACCEPTED
+  PRESIDENT_APPROVED
+  APPROVED
+  DISBURSED
+  CLOSED
+  REJECTED
+  DEFAULTED
+}
+
+enum ApprovalStep {
+  GUARANTOR
+  PRESIDENT
+  TREASURER
+  EXCEPTION
+}
+
+enum Decision {
+  APPROVED
+  REJECTED
+}
+
+enum InvestmentStatus {
+  PROPOSED
+  ACTIVE
+  MATURED
+  CANCELLED
+}
+
+enum ExitStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum SettlementResult {
+  PAID
+  DEBTOR
+}
+
+enum DebtorPlan {
+  PAY_UP
+  CARRY_OVER
+}
+
+enum Channel {
+  SMS
+  EMAIL
+  CALL
+  IN_APP
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+// ───────────────────────── People ─────────────────────────
+
+model User {
+  id                 String     @id @default(cuid())
+  phone              String     @unique // stored as +234XXXXXXXXXX
+  passwordHash       String
+  mustChangePassword Boolean    @default(true)
+  failedAttempts     Int        @default(0)
+  lockedUntil        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  roles              UserRole[]
+  member             Member?
+}
+
+model UserRole {
+  userId String
+  role   Role
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, role])
+}
+
+model Member {
+  id                    String       @id @default(cuid())
+  memberNo              String       @unique // IPU-0001
+  title                 String? // Mrs, Mr, Miss, Madam
+  fullName              String
+  phone                 String       @unique
+  email                 String?
+  bankName              String?
+  accountNumber         String?
+  yearJoined            Int?
+  occupation            String?
+  address               String?
+  emergencyName         String?
+  emergencyPhone        String?
+  usualMonthlyKobo      BigInt       @default(0) // basis of the loan limit (× 12)
+  status                MemberStatus @default(ACTIVE)
+  joinedAt              DateTime     @default(now())
+  exitedAt              DateTime?
+  userId                String?      @unique
+  user                  User?        @relation(fields: [userId], references: [id])
+  ledgerEntries         LedgerEntry[]
+  receipts              Receipt[]
+  loans                 Loan[]       @relation("Borrower")
+  guaranteedLoans       Loan[]       @relation("Guarantor")
+  exits                 Exit[]
+  settlements           Settlement[]
+  contactLogs           ContactLog[]
+  legalReferrals        LegalReferral[]
+}
+
+// ───────────────────────── Calendar ─────────────────────────
+
+model FinancialYear {
+  id               String     @id @default(cuid())
+  label            String     @unique // "2026–2027"
+  startDate        DateTime   @db.Date // 1 March
+  endDate          DateTime   @db.Date // last day of February
+  status           YearStatus @default(OPEN)
+  dividendRateBps  Int? // basis points: 420 = 4.20 %
+  closedById       String?
+  closedAt         DateTime?
+  periods          Period[]
+  settlements      Settlement[]
+}
+
+model Period {
+  id                   String       @id @default(cuid())
+  yearId               String
+  year                 FinancialYear @relation(fields: [yearId], references: [id])
+  month                DateTime     @db.Date // first day of the month
+  status               PeriodStatus @default(OPEN)
+  bankStatementKobo    BigInt?
+  readyById            String?
+  presidentSignedById  String?
+  presidentSignedAt    DateTime?
+  secretarySignedById  String?
+  secretarySignedAt    DateTime?
+  lockedAt             DateTime?
+  ledgerEntries        LedgerEntry[]
+  loanMonths           LoanMonth[]
+
+  @@unique([yearId, month])
+}
+
+model Setting {
+  id            String   @id @default(cuid())
+  key           String // e.g. INTEREST_PER_1000, DUE_DAY, LOAN_LIMIT_MONTHS
+  value         String
+  effectiveFrom DateTime @db.Date
+  createdById   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([key, effectiveFrom])
+}
+
+// ───────────────────────── Money ─────────────────────────
+
+/// Every naira that moves is one row. Rows are never edited or deleted:
+/// a correction is a new REVERSAL row pointing at the original.
+model LedgerEntry {
+  id           String       @id @default(cuid())
+  date         DateTime     @db.Date
+  periodId     String
+  period       Period       @relation(fields: [periodId], references: [id])
+  memberId     String?
+  member       Member?      @relation(fields: [memberId], references: [id])
+  type         EntryType
+  amountKobo   BigInt // always positive; direction comes from the type
+  loanId       String?
+  loan         Loan?        @relation(fields: [loanId], references: [id])
+  investmentId String?
+  investment   Investment?  @relation(fields: [investmentId], references: [id])
+  receiptId    String?
+  receipt      Receipt?     @relation(fields: [receiptId], references: [id])
+  bankRef      String?
+  note         String?
+  enteredById  String
+  createdAt    DateTime     @default(now())
+  reversesId   String?      @unique
+  reverses     LedgerEntry? @relation("Reversal", fields: [reversesId], references: [id])
+  reversedBy   LedgerEntry? @relation("Reversal")
+
+  @@index([memberId, date])
+  @@index([periodId, type])
+  @@index([loanId])
+}
+
+model Receipt {
+  id                 String        @id @default(cuid())
+  memberId           String
+  member             Member        @relation(fields: [memberId], references: [id])
+  amountKobo         BigInt
+  paidOn             DateTime      @db.Date
+  fileKey            String? // object-storage key, never a public URL
+  contributionKobo   BigInt        @default(0)
+  interestKobo       BigInt        @default(0)
+  repaymentKobo      BigInt        @default(0)
+  otherKobo          BigInt        @default(0)
+  status             ReceiptStatus @default(PENDING)
+  rejectReason       String?
+  uploadedById       String
+  checkedById        String?
+  checkedAt          DateTime?
+  createdAt          DateTime      @default(now())
+  ledgerEntries      LedgerEntry[]
+}
+
+// ───────────────────────── Loans ─────────────────────────
+
+model Loan {
+  id              String       @id @default(cuid())
+  borrowerId      String
+  borrower        Member       @relation("Borrower", fields: [borrowerId], references: [id])
+  guarantorId     String
+  guarantor       Member       @relation("Guarantor", fields: [guarantorId], references: [id])
+  amountKobo      BigInt
+  purpose         String
+  status          LoanStatus   @default(REQUESTED)
+  isException     Boolean      @default(false) // above monthly contribution × 12
+  exceptionReason String?
+  guarantorToldAt DateTime? // guarantor informed of an exception
+  disbursedOn     DateTime?    @db.Date
+  bankRef         String?
+  requestedById   String
+  createdAt       DateTime     @default(now())
+  closedAt        DateTime?
+  approvals       LoanApproval[]
+  months          LoanMonth[]
+  ledgerEntries   LedgerEntry[]
+
+  @@index([borrowerId, status])
+  @@index([guarantorId, status])
+}
+
+model LoanApproval {
+  id        String       @id @default(cuid())
+  loanId    String
+  loan      Loan         @relation(fields: [loanId], references: [id])
+  step      ApprovalStep
+  decision  Decision
+  reason    String?
+  byId      String
+  at        DateTime     @default(now())
+}
+
+/// The monthly schedule of a loan, frozen when the month is closed.
+/// interestOwedKobo > 0 is arrears; < 0 is a credit.
+model LoanMonth {
+  id                  String  @id @default(cuid())
+  loanId              String
+  loan                Loan    @relation(fields: [loanId], references: [id])
+  periodId            String
+  period              Period  @relation(fields: [periodId], references: [id])
+  openingKobo         BigInt
+  interestDueKobo     BigInt
+  interestPaidKobo    BigInt
+  interestOwedKobo    BigInt
+  principalRepaidKobo BigInt
+  closingKobo         BigInt
+  nextInterestKobo    BigInt
+
+  @@unique([loanId, periodId])
+}
+
+// ───────────────────────── Investments, exits, year-end ─────────────────────────
+
+model Investment {
+  id                String           @id @default(cuid())
+  kind              String // MMF, Treasury bill, Fixed deposit
+  institution       String
+  amountPlacedKobo  BigInt
+  placedOn          DateTime         @db.Date
+  rateBps           Int? // annual rate in basis points
+  maturityOn        DateTime?        @db.Date
+  amountReturnedKobo BigInt?
+  returnedOn        DateTime?        @db.Date
+  proofKey          String?
+  status            InvestmentStatus @default(PROPOSED)
+  presidentApprovedById String?
+  treasurerApprovedById String?
+  createdAt         DateTime         @default(now())
+  ledgerEntries     LedgerEntry[]
+}
+
+model Exit {
+  id                 String     @id @default(cuid())
+  memberId           String
+  member             Member     @relation(fields: [memberId], references: [id])
+  requestedOn        DateTime   @default(now())
+  status             ExitStatus @default(REQUESTED)
+  contributionsKobo  BigInt?
+  deductionsKobo     BigInt?
+  payoutKobo         BigInt?
+  approvedById       String?
+  paidOn             DateTime?  @db.Date
+}
+
+model Settlement {
+  id                 String           @id @default(cuid())
+  yearId             String
+  year               FinancialYear    @relation(fields: [yearId], references: [id])
+  memberId           String
+  member             Member           @relation(fields: [memberId], references: [id])
+  contributionsKobo  BigInt
+  monthsContributed  Int
+  dividendKobo       BigInt
+  creditRefundKobo   BigInt
+  loanDeductedKobo   BigInt
+  interestDeductedKobo BigInt
+  guarantorRecoveryKobo BigInt        @default(0)
+  payoutKobo         BigInt // negative = debtor
+  result             SettlementResult
+  debtorPlan         DebtorPlan?
+  debtorDueOn        DateTime?        @db.Date
+
+  @@unique([yearId, memberId])
+}
+
+// ───────────────────────── Follow-up, messages, audit ─────────────────────────
+
+model ContactLog {
+  id           String   @id @default(cuid())
+  memberId     String
+  member       Member   @relation(fields: [memberId], references: [id])
+  channel      Channel
+  outcome      String
+  promisedOn   DateTime? @db.Date
+  byId         String
+  at           DateTime @default(now())
+}
+
+model LegalReferral {
+  id         String   @id @default(cuid())
+  memberId   String
+  member     Member   @relation(fields: [memberId], references: [id])
+  referredOn DateTime @db.Date
+  status     String
+  notes      String?
+  byId       String
+}
+
+model Notification {
+  id          String             @id @default(cuid())
+  to          String
+  channel     Channel
+  template    String
+  message     String
+  status      NotificationStatus @default(QUEUED)
+  providerRef String?
+  costKobo    BigInt?
+  attempts    Int                @default(0)
+  createdAt   DateTime           @default(now())
+  sentAt      DateTime?
+}
+
+/// Append-only. Never updated or deleted, even by Admin.
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String // e.g. "payment.record", "loan.approve", "month.reopen"
+  table     String
+  recordId  String
+  oldValue  Json?
+  newValue  Json?
+  reason    String?
+  at        DateTime @default(now())
+
+  @@index([table, recordId])
+  @@index([userId, at])
+}

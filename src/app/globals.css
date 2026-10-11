@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+/* IPU brand kit: forest green, harvest gold, ivory paper, ink. */
+@theme inline {
+  --color-forest: #1e4d3a;
+  --color-forest-dark: #123226;
+  --color-forest-light: #3c8a62;
+  --color-gold: #c99a3e;
+  --color-gold-dark: #8a6420;
+  --color-gold-light: #e4c77e;
+  --color-ivory: #fbf8f1;
+  --color-sand: #f4efe2;
+  --color-line: #d9cfb8;
+  --color-ink: #1c1f1d;
+  --color-muted: #5c5a52;
+  --color-danger: #a3272a;
+
+  --font-display: var(--font-marcellus), "Times New Roman", serif;
+  --font-sans: var(--font-public-sans), "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  background: var(--color-ivory);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 2px;
+}

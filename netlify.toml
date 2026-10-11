@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Set DATABASE_URL and SESSION_SECRET in Netlify:
+# Site configuration → Environment variables. Never put them in this file.
