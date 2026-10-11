@@ -120,7 +120,9 @@ type LoanConfig = { sn: number; borrower: string; month: string; amount: number;
 type BatchConfig = { sn: number; month: string; months: number };
 /** Contributions not written in the workbook (e.g. a member whose payments were kept elsewhere). */
 type ExtraConfig = { sn: number; amount: number; months: string[]; note?: string };
-type Config = { workbook: string; openingBank: number; importThrough: string; members: MemberConfig[]; loans: LoanConfig[]; batches?: BatchConfig[]; extraContributions?: ExtraConfig[] };
+/** One workbook row paying for two members (e.g. ₦20,000 = ₦10,000 each): `amount` of it belongs to shareSn. */
+type SplitConfig = { sn: number; shareSn: number; amount: number; note?: string };
+type Config = { workbook: string; openingBank: number; importThrough: string; members: MemberConfig[]; loans: LoanConfig[]; batches?: BatchConfig[]; extraContributions?: ExtraConfig[]; splitContributions?: SplitConfig[] };
 
 function mostCommon(values: number[]) {
   const counts = new Map<number, number>();
@@ -170,6 +172,7 @@ async function run(file: string, cfg: Config, commit: boolean) {
   const lastClosed = throughIndex - 1; // the current month stays open for new payments
 
   const notes: string[] = [];
+  for (const x of cfg.splitContributions ?? []) notes.push(`S/N ${x.sn}'s contribution is split: ${fmt(N(x.amount))} of it each month goes to S/N ${x.shareSn}.`);
   for (const x of cfg.extraContributions ?? []) notes.push(`S/N ${x.sn}: ${x.months.length} × ${fmt(N(x.amount))} added that are not in the workbook (${fmt(N(x.amount * x.months.length))}).`);
   for (const m of cfg.members) {
     if (m.phone && !normalizePhone(m.phone)) problems.push(`S/N ${m.sn} ${m.fullName}: "${m.phone}" is not a Nigerian phone number.`);
@@ -272,7 +275,15 @@ async function run(file: string, cfg: Config, commit: boolean) {
               continue;
             }
             const batch = cfg.batches?.find((b) => b.sn === r.sn && b.month === key(month));
-            await put(memberId, "CONTRIBUTION", r.c, undefined, batch?.months);
+            const split = cfg.splitContributions?.find((x) => x.sn === r.sn);
+            const shareId = split ? idBySn.get(split.shareSn) : undefined;
+            const share = split && shareId ? Math.min(split.amount, r.c) : 0;
+            if (share > 0 && shareId) {
+              await tx.ledgerEntry.create({
+                data: { date, periodId: period.id, memberId: shareId, type: "CONTRIBUTION", amountKobo: N(share), note: split!.note ?? `Paid together with S/N ${r.sn} (${cfg.workbook}, ${s.month})`, enteredById: admin.id },
+              });
+            }
+            await put(memberId, "CONTRIBUTION", r.c - share, undefined, batch?.months);
             if (r.d > 0) {
               const lc = cfg.loans.find((l) => l.sn === r.sn && l.month === key(month));
               const guarantorId = typeof lc?.guarantorSn === "number" ? idBySn.get(lc.guarantorSn) : undefined;
