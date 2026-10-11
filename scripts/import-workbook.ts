@@ -118,7 +118,9 @@ type MemberConfig = {
 type LoanConfig = { sn: number; borrower: string; month: string; amount: number; guarantorSn: number | "verbal" | null; check?: string };
 /** A contribution that pays ahead for several months (e.g. ₦60,000 = 4 × ₦15,000). */
 type BatchConfig = { sn: number; month: string; months: number };
-type Config = { workbook: string; openingBank: number; importThrough: string; members: MemberConfig[]; loans: LoanConfig[]; batches?: BatchConfig[] };
+/** Contributions not written in the workbook (e.g. a member whose payments were kept elsewhere). */
+type ExtraConfig = { sn: number; amount: number; months: string[]; note?: string };
+type Config = { workbook: string; openingBank: number; importThrough: string; members: MemberConfig[]; loans: LoanConfig[]; batches?: BatchConfig[]; extraContributions?: ExtraConfig[] };
 
 function mostCommon(values: number[]) {
   const counts = new Map<number, number>();
@@ -162,12 +164,16 @@ async function run(file: string, cfg: Config, commit: boolean) {
   const throughIndex = MONTHS.findIndex((_, i) => key(monthDate(startYear, i)) === cfg.importThrough);
   if (throughIndex < 0) throw new Error(`importThrough "${cfg.importThrough}" is not a month of this year.`);
   const used = sheets.filter((s) => s.index <= throughIndex);
+  for (const x of cfg.extraContributions ?? []) {
+    if (!cfg.members.some((m) => m.sn === x.sn)) problems.push(`Extra contributions: S/N ${x.sn} is not in the members list.`);
+  }
   const lastClosed = throughIndex - 1; // the current month stays open for new payments
 
   const notes: string[] = [];
+  for (const x of cfg.extraContributions ?? []) notes.push(`S/N ${x.sn}: ${x.months.length} × ${fmt(N(x.amount))} added that are not in the workbook (${fmt(N(x.amount * x.months.length))}).`);
   for (const m of cfg.members) {
     if (m.phone && !normalizePhone(m.phone)) problems.push(`S/N ${m.sn} ${m.fullName}: "${m.phone}" is not a Nigerian phone number.`);
-    if (!m.phone) notes.push(`S/N ${m.sn} ${m.fullName}: no phone yet, so no login. Add it later under Members → Edit details.`);
+    if (!m.phone) notes.push(`S/N ${m.sn} ${m.fullName}: no phone in the file. If already in the app they keep their own; otherwise no login until it is added (Members → Edit details).`);
     if (!(m.usualMonthly > 0)) problems.push(`S/N ${m.sn} ${m.fullName}: usual monthly contribution missing.`);
   }
   for (const l of cfg.loans) {
@@ -293,6 +299,15 @@ async function run(file: string, cfg: Config, commit: boolean) {
             await put(memberId, "LOAN_REPAID", r.i, loanId);
           }
 
+          for (const x of cfg.extraContributions ?? []) {
+            const memberId = idBySn.get(x.sn);
+            if (memberId && x.months.includes(key(month))) {
+              await tx.ledgerEntry.create({
+                data: { date, periodId: period.id, memberId, type: "CONTRIBUTION", amountKobo: N(x.amount), note: x.note ?? "Added at import (not in the workbook)", enteredById: admin.id },
+              });
+            }
+          }
+
           // Workbook totals row must match what was read.
           const sum = (f: "c" | "d" | "g" | "i") => s.rows.reduce((t, r) => t + r[f], 0);
           for (const f of ["c", "d", "g", "i"] as const) {
@@ -351,9 +366,12 @@ async function run(file: string, cfg: Config, commit: boolean) {
 }
 
 async function main() {
-  const [file, ...flags] = process.argv.slice(2);
+  // Windows PowerShell can swallow "--commit"; also accept plain "commit", or the import:commit script.
+  const args = process.argv.slice(2);
+  const file = args.find((a) => !a.startsWith("--") && a !== "commit");
+  const commit = args.includes("--commit") || args.includes("commit") || process.env.IMPORT_COMMIT === "1";
   if (!file || !existsSync(file)) {
-    console.log('Usage: npm run import:workbook -- "<workbook.xlsx>" [--commit]');
+    console.log('Usage: npm run import:workbook -- "<workbook.xlsx>"   (dry run)\n       npm run import:commit -- "<workbook.xlsx>"     (save)');
     process.exit(1);
   }
   mkdirSync("import", { recursive: true });
@@ -364,7 +382,7 @@ async function main() {
     console.log(`Wrote ${cfgPath}. Fill in what is marked "check" (phones, usual monthly, guarantors), then run again.`);
   }
   const cfg = JSON.parse(readFileSync(cfgPath, "utf8")) as Config;
-  await run(file, cfg, flags.includes("--commit"));
+  await run(file, cfg, commit);
   await db.$disconnect();
 }
 
