@@ -24,7 +24,7 @@ You need Git, Node.js (LTS, version 22 or newer) and VS Code installed.
    - `SESSION_SECRET` — run `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` and paste the result.
    - `ADMIN_PHONE`, `ADMIN_TEMP_PASSWORD` — your phone number and a temporary password.
    - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — where receipt photos are kept. In Supabase open
-     **Project Settings → API**, copy the Project URL and the `service_role` secret. You can leave both
+     **Project Settings → API Keys**, copy the Project URL and a **Secret key** (`sb_secret_…`). You can leave both
      empty on your computer: receipts are then saved in a local `.uploads` folder (ignored by Git).
 
    `.env` holds secrets. It is ignored by Git and must never be committed.

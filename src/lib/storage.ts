@@ -37,7 +37,11 @@ export function sniffType(bytes: Uint8Array): FileType | null {
 function supabase() {
   const url = process.env.SUPABASE_URL?.trim().replace(/\/$/, "");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (url && key) return { url, headers: { Authorization: `Bearer ${key}`, apikey: key } };
+  // New Supabase secret keys (sb_secret_…) go only in the apikey header; legacy service_role JWTs also as Bearer.
+  if (url && key) {
+    const headers: Record<string, string> = key.startsWith("sb_") ? { apikey: key } : { Authorization: `Bearer ${key}`, apikey: key };
+    return { url, headers };
+  }
   if (process.env.NODE_ENV === "production" && process.env.NETLIFY) {
     throw new SetupError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are needed to store receipts.");
   }
