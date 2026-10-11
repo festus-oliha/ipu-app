@@ -1,7 +1,7 @@
 # IPU App — Iyobor Progressive Union
 
 Contributions, loans, interest and year-end payouts for the Iyobor Progressive Union,
-replacing the Excel workbook. Built with Next.js, TypeScript, Tailwind CSS, Prisma and PostgreSQL.
+replacing the Excel workbook. Built with Next.js, TypeScript, Tailwind CSS, Prisma and PostgreSQL on Supabase.
 
 The approved requirements and system design are in [`docs/`](docs/).
 
@@ -14,11 +14,13 @@ You need Git, Node.js (LTS, version 22 or newer) and VS Code installed.
    ```bash
    npm install
    ```
-3. **Create a free database.** Sign up at [neon.tech](https://neon.tech) with the union email,
-   create a project called `ipu`, and copy its connection string
-   (it starts with `postgresql://` and ends with `?sslmode=require`).
+3. **Create the Supabase database.** Sign in at [supabase.com](https://supabase.com) with the union
+   email and create a new project named `ipu`. Choose a strong database password made of letters and
+   numbers only, and save it somewhere safe. When the project is ready, click **Connect** at the top
+   and copy two connection strings: **Transaction pooler** (port 6543) and **Session pooler** (port 5432).
 4. **Create your `.env` file.** Copy `.env.example` to a new file named `.env` and fill it in:
-   - `DATABASE_URL` — the connection string from step 3.
+   - `DATABASE_URL` — the Transaction pooler string, with your password in place of `[YOUR-PASSWORD]`.
+   - `DIRECT_URL` — the Session pooler string, with your password.
    - `SESSION_SECRET` — run `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` and paste the result.
    - `ADMIN_PHONE`, `ADMIN_TEMP_PASSWORD` — your phone number and a temporary password.
 
@@ -70,6 +72,6 @@ You need Git, Node.js (LTS, version 22 or newer) and VS Code installed.
 
 ## Going live (Netlify)
 
-Connect this GitHub repository in Netlify, then add `DATABASE_URL` and `SESSION_SECRET` under
+Connect this GitHub repository in Netlify, then add `DATABASE_URL`, `DIRECT_URL` and `SESSION_SECRET` under
 Site configuration → Environment variables. Each push to `main` deploys automatically.
 Run `npm run db:deploy` against the live database when the schema changes.
