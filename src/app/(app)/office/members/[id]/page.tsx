@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Card, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { Card, LinkButton, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { MEMBER_ADMIN_ROLES, OFFICER_ROLES, hasRole, requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatNaira } from "@/lib/money";
@@ -31,6 +31,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
     <div className="flex flex-col gap-6">
       <PageHeader eyebrow={member.memberNo} title={[member.title, member.fullName].filter(Boolean).join(" ")}>
         <StatusBadge status={member.status} />
+        <LinkButton href={`/statement/${member.id}`} variant="secondary">Statement</LinkButton>
       </PageHeader>
       <p className="-mt-3 text-sm text-muted">
         {displayPhone(member.phone)}
@@ -39,7 +40,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
 
       {totals && year ? (
         <div className="grid gap-3 sm:grid-cols-3">
-          <Stat label={`Savings ${year.label}`} value={formatNaira(totals.contributions, { compact: true })} note={`${totals.monthsContributed} of 12 months`} />
+          <Stat label={`Savings ${year.label}`} value={formatNaira(totals.savings, { compact: true })} note={`${totals.monthsContributed} of 12 months`} />
           <Stat label="Loan limit" value={formatNaira(member.usualMonthlyKobo * 12n, { compact: true })} note="Usual monthly × 12" />
           <Stat label="Membership fees" value={formatNaira(totals.membershipFees, { compact: true })} />
         </div>

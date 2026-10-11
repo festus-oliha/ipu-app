@@ -24,7 +24,7 @@ export const ENTRY_LABELS: Record<EntryType, string> = {
   EXPENSE: "Expense",
   PAYOUT: "Payout",
   INTEREST_CHARGED: "Interest charged",
-  DEDUCTION: "Deduction",
+  DEDUCTION: "Taken from savings",
   REVERSAL: "Reversal",
   LOAN_DEDUCTED: "Loan taken from savings",
   INTEREST_DEDUCTED: "Interest taken from savings",
@@ -62,6 +62,7 @@ export async function memberYearTotals(memberId: string, year: { id: string }) {
     _sum: { amountKobo: true },
   });
   let contributions = 0n;
+  let deducted = 0n;
   let membershipFees = 0n;
   const monthsWithContribution = new Set<string>();
   for (const r of rows) {
@@ -71,8 +72,11 @@ export async function memberYearTotals(memberId: string, year: { id: string }) {
       if (amount > 0n) monthsWithContribution.add(r.periodId);
     }
     if (r.type === "MEMBERSHIP_FEE") membershipFees += amount;
+    if (r.type === "DEDUCTION") deducted += amount;
   }
-  return { contributions, membershipFees, monthsContributed: monthsWithContribution.size };
+  // Savings = what was paid in, less anything already taken to clear a debt
+  // (the member's own, or a loan they guaranteed).
+  return { contributions, deducted, savings: contributions - deducted, membershipFees, monthsContributed: monthsWithContribution.size };
 }
 
 /** Names of the officers who entered rows, keyed by user id. */

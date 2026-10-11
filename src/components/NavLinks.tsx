@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export type NavItem = { href: string; label: string };
+export type NavItem = { href: string; label: string; exact?: boolean };
 
 /** Tabs under the header; scroll sideways on small phones. */
 export function NavLinks({ items }: { items: NavItem[] }) {
@@ -11,7 +11,8 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   return (
     <nav aria-label="Main" className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-3">
       {items.map((item) => {
-        const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
+        const more = ["/office/bank", "/office/exits", "/office/year-end", "/office/messages", "/office/reports"];
+        const active = item.href === "/" ? path === "/" : item.exact ? path === item.href || more.some((m) => path.startsWith(m)) : path.startsWith(item.href);
         return (
           <Link
             key={item.href}

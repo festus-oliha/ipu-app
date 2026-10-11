@@ -19,7 +19,7 @@ export default async function ExitPage() {
   if (!user.member || !year) return <p>Your login is not linked to a member record.</p>;
   const exit = await db.exit.findFirst({ where: { memberId: user.member.id }, orderBy: { requestedOn: "desc" } });
   const f = await memberFigures(user.member.id, year);
-  const s = settle({ contributions: f.contributions, dividend: 0n, principal: f.position.principal, interestOwed: f.position.interestOwed });
+  const s = settle({ contributions: f.savings, dividend: 0n, principal: f.position.principal, interestOwed: f.position.interestOwed });
   const open = exit && (exit.status === "REQUESTED" || exit.status === "APPROVED" || exit.status === "PAID");
 
   return (
@@ -28,6 +28,7 @@ export default async function ExitPage() {
       <Card title="What you would receive">
         <dl className="grid gap-2 text-sm sm:max-w-md">
           <div className="flex justify-between"><dt>Contributions this year</dt><dd className="font-semibold tabular-nums">{formatNaira(f.contributions)}</dd></div>
+          {f.deducted ? <div className="flex justify-between"><dt>Already taken for a debt</dt><dd className="font-semibold tabular-nums">−{formatNaira(f.deducted)}</dd></div> : null}
           {s.credit ? <div className="flex justify-between"><dt>Interest credit refunded</dt><dd className="font-semibold tabular-nums">+{formatNaira(s.credit)}</dd></div> : null}
           {s.interestDeducted ? <div className="flex justify-between"><dt>Interest owed</dt><dd className="font-semibold tabular-nums">−{formatNaira(s.interestDeducted)}</dd></div> : null}
           {s.loanDeducted ? <div className="flex justify-between"><dt>Loan balance</dt><dd className="font-semibold tabular-nums">−{formatNaira(s.loanDeducted)}</dd></div> : null}

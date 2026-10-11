@@ -33,9 +33,10 @@ export type SettlementRow = {
 export async function yearEndPreview(year: { id: string; startDate: Date; endDate: Date; dividendRateBps: number | null }) {
   const lastMonth = new Date(Date.UTC(year.endDate.getUTCFullYear(), year.endDate.getUTCMonth(), 1));
   const rate = year.dividendRateBps ?? 0;
-  const [members, contribRows, positions, flows, investments] = await Promise.all([
+  const [members, contribRows, deductRows, positions, flows, investments] = await Promise.all([
     db.member.findMany({ where: { status: { not: "EXITED" } }, orderBy: { memberNo: "asc" } }),
     db.ledgerEntry.groupBy({ by: ["memberId", "periodId"], where: { ...LIVE, type: "CONTRIBUTION", memberId: { not: null }, period: { yearId: year.id } }, _sum: { amountKobo: true } }),
+    db.ledgerEntry.groupBy({ by: ["memberId"], where: { ...LIVE, type: "DEDUCTION", memberId: { not: null }, period: { yearId: year.id } }, _sum: { amountKobo: true } }),
     positionsThrough(lastMonth),
     db.ledgerEntry.groupBy({ by: ["type"], where: { ...LIVE, period: { yearId: year.id } }, _sum: { amountKobo: true } }),
     db.investment.findMany({ where: { status: "MATURED", returnedOn: { gte: year.startDate, lte: year.endDate } } }),
@@ -50,9 +51,13 @@ export async function yearEndPreview(year: { id: string; startDate: Date; endDat
     contrib.set(r.memberId!, c);
   }
 
+  const deducted = new Map(deductRows.map((r) => [r.memberId!, r._sum.amountKobo ?? 0n]));
+
   const rows: SettlementRow[] = [];
   for (const m of members) {
-    const c = contrib.get(m.id) ?? { total: 0n, months: 0 };
+    const paid = contrib.get(m.id) ?? { total: 0n, months: 0 };
+    // Savings already used during the year (a default, or a loan they guaranteed) are not paid twice.
+    const c = { total: paid.total - (deducted.get(m.id) ?? 0n), months: paid.months };
     const pos = positions.get(m.id) ?? { principal: 0n, interestOwed: 0n };
     if (c.total === 0n && pos.principal === 0n && pos.interestOwed === 0n) continue;
     const div = dividend(c.total, rate, c.months);

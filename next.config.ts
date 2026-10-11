@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  serverExternalPackages: ["@node-rs/argon2"],
+  serverExternalPackages: ["@node-rs/argon2", "nodemailer", "exceljs"],
   experimental: {
     // Receipt photos are shrunk in the browser first; PDFs can be up to 4 MB.
     serverActions: { bodySizeLimit: "5mb" },

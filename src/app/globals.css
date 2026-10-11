@@ -29,3 +29,17 @@ body {
   outline: 3px solid var(--color-gold);
   outline-offset: 2px;
 }
+
+/* Printed statements and reports: A4, no background, keep table rows together. */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  body {
+    background: #fff;
+  }
+  tr {
+    break-inside: avoid;
+  }
+}

@@ -25,7 +25,7 @@ export default async function ExitsPage() {
     await Promise.all(
       exits.filter((e) => e.status === "REQUESTED" || e.status === "APPROVED").map(async (e) => {
         const f = await memberFigures(e.memberId, year);
-        return [e.id, { f, s: settle({ contributions: f.contributions, dividend: 0n, principal: f.position.principal, interestOwed: f.position.interestOwed }) }] as const;
+        return [e.id, { f, s: settle({ contributions: f.savings, dividend: 0n, principal: f.position.principal, interestOwed: f.position.interestOwed }) }] as const;
       }),
     ),
   );
@@ -52,7 +52,7 @@ export default async function ExitsPage() {
             </div>
             {l ? (
               <p className="mb-3 text-sm">
-                Contributions {formatNaira(l.f.contributions)}
+                Savings {formatNaira(l.f.savings)}
                 {l.s.credit ? ` + credit ${formatNaira(l.s.credit)}` : ""}
                 {l.s.interestDeducted ? ` − interest ${formatNaira(l.s.interestDeducted)}` : ""}
                 {l.s.loanDeducted ? ` − loan ${formatNaira(l.s.loanDeducted)}` : ""} = <span className="font-semibold">payout {formatNaira(l.s.payout)}</span>

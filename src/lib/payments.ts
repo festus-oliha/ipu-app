@@ -79,5 +79,5 @@ export async function paymentSms(member: { id: string; phone: string }, year: { 
       : parts.interestPaid + parts.loanRepaid > 0n && after.interestOwed <= 0n
         ? " Your loan is fully repaid."
         : "";
-  await queueSms(member.phone, "payment.recorded", `IPU: ${what} received ${formatDate(date)}. Savings this year: ${formatNairaSms(totals.contributions)}.${loanText} Thank you.`);
+  await queueSms(member.phone, "payment.recorded", `IPU: ${what} received ${formatDate(date)}. Savings this year: ${formatNairaSms(totals.savings)}.${loanText} Thank you.`);
 }

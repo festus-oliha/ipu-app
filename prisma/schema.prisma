@@ -429,8 +429,12 @@ model Notification {
   providerRef String?
   costKobo    BigInt?
   attempts    Int                @default(0)
+  subject     String? // email only
+  error       String? // last provider error, shown on the Messages page
   createdAt   DateTime           @default(now())
   sentAt      DateTime?
+
+  @@index([status, createdAt])
 }
 
 /// Append-only. Never updated or deleted, even by Admin.

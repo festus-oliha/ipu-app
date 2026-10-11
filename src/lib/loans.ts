@@ -7,7 +7,7 @@ import { positionFromRows, type LoanPosition } from "./position";
 type Tx = Prisma.TransactionClient;
 
 /** Loans that still tie up a guarantor (counted against the limit of two). */
-export const OPEN_LOAN_STATUSES: LoanStatus[] = ["REQUESTED", "GUARANTOR_ACCEPTED", "PRESIDENT_APPROVED", "APPROVED", "DISBURSED"];
+export const OPEN_LOAN_STATUSES: LoanStatus[] = ["REQUESTED", "GUARANTOR_ACCEPTED", "PRESIDENT_APPROVED", "APPROVED", "DISBURSED", "DEFAULTED"];
 /** Requests not yet paid out. */
 export const PENDING_STATUSES: LoanStatus[] = ["REQUESTED", "GUARANTOR_ACCEPTED", "PRESIDENT_APPROVED", "APPROVED"];
 
@@ -74,6 +74,6 @@ export async function activeGuarantees(guarantorId: string, exceptLoanId?: strin
 export async function closeLoansIfCleared(memberId: string, tx: Tx) {
   const pos = await memberPosition(memberId, undefined, tx);
   if (pos.principal <= 0n && pos.interestOwed <= 0n) {
-    await tx.loan.updateMany({ where: { borrowerId: memberId, status: "DISBURSED" }, data: { status: "CLOSED", closedAt: new Date() } });
+    await tx.loan.updateMany({ where: { borrowerId: memberId, status: { in: ["DISBURSED", "DEFAULTED"] } }, data: { status: "CLOSED", closedAt: new Date() } });
   }
 }

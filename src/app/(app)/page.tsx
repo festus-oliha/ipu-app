@@ -60,7 +60,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {totals && year ? (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Stat label={`My savings ${year.label}`} value={formatNaira(totals.contributions, { compact: true })} note={`Paid in ${totals.monthsContributed} of 12 months`} />
+            <Stat label={`My savings ${year.label}`} value={formatNaira(totals.savings, { compact: true })} note={totals.deducted ? `Paid in ${totals.monthsContributed} of 12 months · ${formatNaira(totals.deducted, { compact: true })} used for a debt` : `Paid in ${totals.monthsContributed} of 12 months`} />
             <Stat label="My loan balance" value={loanStat.value} note={loanStat.note} />
             <Stat
               label="Dividend"
@@ -149,6 +149,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
           <Card title="My payments this year">
             <PaymentHistory memberId={user.member!.id} />
+            <div className="mt-4"><LinkButton href={`/statement/${user.member!.id}`} variant="secondary">My statement (print or PDF)</LinkButton></div>
           </Card>
           <p className="text-center text-sm">
             <Link href="/exit" className="text-muted underline underline-offset-2">{exited ? "My exit" : "Leave the union"}</Link>
@@ -163,9 +164,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             {hasRole(user, ...PAYMENT_ROLES) ? <LinkButton href="/office/payments/new">Record payment</LinkButton> : null}
             <LinkButton href="/office/sheet" variant="secondary">Monthly sheet</LinkButton>
             <LinkButton href="/office/loans" variant="secondary">Loans</LinkButton>
-            <LinkButton href="/office/bank" variant="secondary">Bank and investments</LinkButton>
-            <LinkButton href="/office/exits" variant="secondary">Exits</LinkButton>
-            <LinkButton href="/office/year-end" variant="secondary">Year end</LinkButton>
+            <LinkButton href="/office/debtors" variant="secondary">Debtors</LinkButton>
+            <LinkButton href="/office" variant="secondary">More…</LinkButton>
             <LinkButton href="/office/members" variant="secondary">Members</LinkButton>
           </div>
         </Card>

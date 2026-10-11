@@ -9,18 +9,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireUser();
   if (user.mustChangePassword) redirect("/change-password");
 
+  const officer = hasRole(user, ...OFFICER_ROLES);
   const items: NavItem[] = [{ href: "/", label: "Home" }];
-  if (hasRole(user, ...OFFICER_ROLES)) items.push({ href: "/office/sheet", label: "Monthly sheet" });
+  if (officer) items.push({ href: "/office/sheet", label: "Monthly sheet" });
   if (hasRole(user, ...PAYMENT_ROLES)) items.push({ href: "/office/payments/new", label: "Record payment" });
   if (hasRole(user, ...PAYMENT_ROLES)) items.push({ href: "/office/receipts", label: "Receipts" });
-  if (hasRole(user, ...OFFICER_ROLES)) items.push({ href: "/office/loans", label: "Loans" });
-  if (hasRole(user, ...OFFICER_ROLES)) items.push({ href: "/office/members", label: "Members" });
-  if (hasRole(user, ...OFFICER_ROLES)) items.push({ href: "/office/bank", label: "Bank" });
-  if (hasRole(user, ...OFFICER_ROLES)) items.push({ href: "/office/year-end", label: "Year end" });
+  if (officer) {
+    items.push({ href: "/office/loans", label: "Loans" }, { href: "/office/members", label: "Members" }, { href: "/office/debtors", label: "Debtors" });
+    items.push({ href: "/office", label: "More", exact: true });
+  }
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="bg-forest text-ivory">
+      <header className="bg-forest text-ivory print:hidden">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 pt-3 pb-1">
           <div className="flex min-w-0 items-center gap-3">
             <Seal size={40} variant="reverse" />
@@ -35,7 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {items.length > 1 ? <NavLinks items={items} /> : <div className="h-2" />}
         <div className="h-1 bg-gold" />
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8">{children}</main>
+      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8 print:max-w-none print:p-0">{children}</main>
     </div>
   );
 }

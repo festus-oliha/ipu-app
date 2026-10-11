@@ -71,13 +71,13 @@ export async function decideExit(exitId: string, _prev: ExitState, form: FormDat
   const blocked = await blockers(exit.memberId);
   if (blocked.length) return { error: blocked.join(" ") };
   const f = await memberFigures(exit.memberId, year);
-  const s = settle({ contributions: f.contributions, dividend: 0n, principal: f.position.principal, interestOwed: f.position.interestOwed });
+  const s = settle({ contributions: f.savings, dividend: 0n, principal: f.position.principal, interestOwed: f.position.interestOwed });
   if (s.shortfall > 0n) return { error: `${exit.member.fullName} owes ${formatNaira(s.shortfall)} more than their savings. That must be paid before they can leave.` };
 
   await db.$transaction(async (tx) => {
     await tx.exit.update({
       where: { id: exit.id },
-      data: { status: "APPROVED", approvedById: user.id, contributionsKobo: f.contributions, deductionsKobo: s.interestDeducted + s.loanDeducted - s.credit, payoutKobo: s.payout },
+      data: { status: "APPROVED", approvedById: user.id, contributionsKobo: f.savings, deductionsKobo: s.interestDeducted + s.loanDeducted - s.credit, payoutKobo: s.payout },
     });
     await audit({ userId: user.id, action: "exit.approve", table: "Exit", recordId: exit.id, newValue: s }, tx);
   });
@@ -102,7 +102,7 @@ export async function payExit(exitId: string, _prev: ExitState, form: FormData):
 
   // Recompute: a payment may have arrived since approval.
   const f = await memberFigures(exit.memberId, year);
-  const s = settle({ contributions: f.contributions, dividend: 0n, principal: f.position.principal, interestOwed: f.position.interestOwed });
+  const s = settle({ contributions: f.savings, dividend: 0n, principal: f.position.principal, interestOwed: f.position.interestOwed });
   if (s.shortfall > 0n) return { error: `The member now owes ${formatNaira(s.shortfall)} more than their savings.` };
   const bankRef = String(form.get("bankRef") ?? "").trim() || null;
 
@@ -113,7 +113,7 @@ export async function payExit(exitId: string, _prev: ExitState, form: FormData):
     }
     await tx.exit.update({
       where: { id: exit.id },
-      data: { status: "PAID", paidOn: date, bankRef, contributionsKobo: f.contributions, deductionsKobo: s.interestDeducted + s.loanDeducted - s.credit, payoutKobo: s.payout },
+      data: { status: "PAID", paidOn: date, bankRef, contributionsKobo: f.savings, deductionsKobo: s.interestDeducted + s.loanDeducted - s.credit, payoutKobo: s.payout },
     });
     await tx.member.update({ where: { id: exit.memberId }, data: { status: "EXITED", exitedAt: date } });
     await audit({ userId: user.id, action: "exit.pay", table: "Exit", recordId: exit.id, newValue: s }, tx);

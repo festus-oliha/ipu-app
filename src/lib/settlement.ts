@@ -23,6 +23,13 @@ export async function postDeductions(
   input: { memberId: string; date: Date; periodId: string; settled: Settled; officerId: string; note: string },
   tx: Tx,
 ) {
+  // The member's own savings go down by what was used to clear their debt.
+  const fromSavings = input.settled.interestDeducted + input.settled.loanDeducted;
+  if (fromSavings > 0n) {
+    await tx.ledgerEntry.create({
+      data: { date: input.date, periodId: input.periodId, memberId: input.memberId, type: "DEDUCTION", amountKobo: fromSavings, note: input.note, enteredById: input.officerId },
+    });
+  }
   const loan = await tx.loan.findFirst({ where: { borrowerId: input.memberId, status: { in: ["DISBURSED", "CLOSED", "DEFAULTED"] } }, orderBy: { disbursedOn: "desc" } });
   const rows = [
     { type: "CREDIT_REFUNDED" as const, kobo: input.settled.credit },
