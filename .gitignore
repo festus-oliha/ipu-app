@@ -45,3 +45,6 @@ next-env.d.ts
 /src/generated/
 !.env.example
 /.uploads/
+
+# Workbook import: personal data (phones, temporary passwords)
+/import/
