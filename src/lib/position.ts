@@ -1,9 +1,9 @@
 /**
  * A member's loan account worked out from ledger rows (pure, no database).
  * Same as the workbook's single row per member:
- *   principal    = loans given − loans repaid − principal deducted
+ *   principal    = loans given − loans repaid − loan deducted
  *   interestOwed = interest charged − interest paid − interest deducted
- *                  (> 0 arrears, < 0 credit from overpaying)
+ *                  + credit refunded   (> 0 arrears, < 0 credit from overpaying)
  */
 import type { Kobo } from "./money";
 
@@ -20,13 +20,18 @@ export function positionFromRows(rows: LedgerRow[]): LoanPosition {
         principal += r.amountKobo;
         break;
       case "LOAN_REPAID":
+      case "LOAN_DEDUCTED":
         principal -= r.amountKobo;
         break;
       case "INTEREST_CHARGED":
         interestOwed += r.amountKobo;
         break;
       case "INTEREST_PAID":
+      case "INTEREST_DEDUCTED":
         interestOwed -= r.amountKobo;
+        break;
+      case "CREDIT_REFUNDED":
+        interestOwed += r.amountKobo;
         break;
     }
   }

@@ -5,7 +5,7 @@ import { db } from "./db";
 type Tx = Prisma.TransactionClient;
 
 /**
- * Puts an SMS in the outbox. Phase 4 adds the sender that delivers queued
+ * Puts an SMS in the outbox. A later phase adds the sender that delivers queued
  * messages through the chosen provider; until then they wait here, so no
  * payment ever goes without its message.
  */

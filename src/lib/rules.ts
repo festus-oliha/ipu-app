@@ -194,6 +194,30 @@ export function exitPayout(input: { contributions: Kobo; loanBalance: Kobo; inte
 }
 
 /**
+ * What is actually posted when settling (year end or exit): the overpaid-interest
+ * credit is refunded, then interest owed and then the loan are taken from the
+ * money available (contributions + dividend + credit). Whatever cannot be
+ * covered stays owed ("shortfall") — a debtor pays it up or carries it over.
+ */
+export function settle(input: { contributions: Kobo; dividend: Kobo; principal: Kobo; interestOwed: Kobo }) {
+  const credit = input.interestOwed < 0n ? -input.interestOwed : 0n;
+  const interest = input.interestOwed > 0n ? input.interestOwed : 0n;
+  const principal = input.principal > 0n ? input.principal : 0n;
+  let available = input.contributions + input.dividend + credit;
+  const interestDeducted = interest < available ? interest : available;
+  available -= interestDeducted;
+  const loanDeducted = principal < available ? principal : available;
+  available -= loanDeducted;
+  return {
+    credit,
+    interestDeducted,
+    loanDeducted,
+    payout: available,
+    shortfall: interest - interestDeducted + (principal - loanDeducted),
+  };
+}
+
+/**
  * Default recovery (BR-2): borrower's contributions first, then the guarantor's,
  * up to what is still owed.
  */

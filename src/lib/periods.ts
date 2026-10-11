@@ -40,7 +40,14 @@ export async function periodFor(date: Date) {
   return db.period.findFirst({ where: { month }, include: { year: true } });
 }
 
-/** The open financial year (the one most recently started). */
+/**
+ * The financial year we are in today (the newest open year that has started).
+ * Next year can be opened in February, but it only becomes "current" on 1 March.
+ */
 export async function currentYear() {
-  return db.financialYear.findFirst({ where: { status: { not: "CLOSED" } }, orderBy: { startDate: "desc" } });
+  const today = new Date(`${todayLagos()}T00:00:00Z`);
+  return (
+    (await db.financialYear.findFirst({ where: { status: { not: "CLOSED" }, startDate: { lte: today } }, orderBy: { startDate: "desc" } })) ??
+    (await db.financialYear.findFirst({ where: { status: { not: "CLOSED" } }, orderBy: { startDate: "asc" } }))
+  );
 }

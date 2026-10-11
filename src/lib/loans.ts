@@ -1,7 +1,7 @@
 import "server-only";
 import type { LoanStatus, Prisma } from "@/generated/prisma/client";
 import { db } from "./db";
-import { LIVE } from "./ledger";
+import { LIVE, LOAN_TYPES } from "./ledger";
 import { positionFromRows, type LoanPosition } from "./position";
 
 type Tx = Prisma.TransactionClient;
@@ -31,7 +31,7 @@ export async function memberPosition(memberId: string, throughMonth?: Date, tx: 
     where: {
       ...LIVE,
       memberId,
-      type: { in: ["LOAN_GIVEN", "LOAN_REPAID", "INTEREST_CHARGED", "INTEREST_PAID"] },
+      type: { in: LOAN_TYPES },
       ...(throughMonth ? { period: { month: { lte: throughMonth } } } : {}),
     },
     select: { type: true, amountKobo: true },
@@ -46,7 +46,7 @@ export async function positionsThrough(throughMonth: Date, tx: Tx | typeof db = 
     where: {
       ...LIVE,
       memberId: { not: null },
-      type: { in: ["LOAN_GIVEN", "LOAN_REPAID", "INTEREST_CHARGED", "INTEREST_PAID"] },
+      type: { in: LOAN_TYPES },
       period: { month: { lte: throughMonth } },
     },
     _sum: { amountKobo: true },

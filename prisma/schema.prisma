@@ -57,6 +57,9 @@ enum EntryType {
   INTEREST_CHARGED
   DEDUCTION
   REVERSAL
+  LOAN_DEDUCTED // loan balance taken from contributions (year end, exit, default)
+  INTEREST_DEDUCTED // interest owed taken from contributions
+  CREDIT_REFUNDED // overpaid interest given back at year end or exit
 }
 
 enum ReceiptStatus {
@@ -348,6 +351,7 @@ model Investment {
   status            InvestmentStatus @default(PROPOSED)
   presidentApprovedById String?
   treasurerApprovedById String?
+  note              String?
   createdAt         DateTime         @default(now())
   ledgerEntries     LedgerEntry[]
 }
@@ -363,6 +367,10 @@ model Exit {
   payoutKobo         BigInt?
   approvedById       String?
   paidOn             DateTime?  @db.Date
+  reason             String? // why the member is leaving
+  requestedById      String?
+  rejectReason       String?
+  bankRef            String?
 }
 
 model Settlement {
@@ -382,6 +390,8 @@ model Settlement {
   result             SettlementResult
   debtorPlan         DebtorPlan?
   debtorDueOn        DateTime?        @db.Date
+  paidOn             DateTime?        @db.Date
+  bankRef            String?
 
   @@unique([yearId, memberId])
 }

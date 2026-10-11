@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { audit } from "@/lib/audit";
 import { PAYMENT_ROLES, actionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { ENTRY_LABELS, memberYearTotals } from "@/lib/ledger";
+import { ENTRY_LABELS } from "@/lib/ledger";
 import { formatNairaSms, parseNaira } from "@/lib/money";
-import { queueSms } from "@/lib/notify";
-import { closeLoansIfCleared, memberPosition } from "@/lib/loans";
-import { formatDate, monthLabel, parseDateInput, periodFor, todayLagos } from "@/lib/periods";
+import { memberPosition } from "@/lib/loans";
+import { loanPartErrors, partsList, paymentSms, postMemberPayment } from "@/lib/payments";
+import { monthLabel, parseDateInput, periodFor, todayLagos } from "@/lib/periods";
 
 export type PaymentState = {
   errors?: Record<string, string>;
@@ -55,16 +55,8 @@ export async function recordPayment(_prev: PaymentState, form: FormData): Promis
     errors.contribution = "Enter at least one amount.";
   }
 
-  // Interest and repayments only make sense against an existing loan account.
   const position = member ? await memberPosition(member.id) : null;
-  if (position && interestPaid > 0n && position.principal <= 0n && position.interestOwed <= 0n) {
-    errors.interestPaid = "This member has no loan or interest to pay.";
-  }
-  if (position && loanRepaid > position.principal) {
-    errors.loanRepaid = position.principal > 0n
-      ? `More than the loan balance of ${formatNairaSms(position.principal).replace("N", "₦")}.`
-      : "This member has no loan to repay.";
-  }
+  if (position) Object.assign(errors, loanPartErrors(position, { interestPaid, loanRepaid }));
 
   const period = date ? await periodFor(date) : null;
   if (date && !errors.date) {
@@ -73,42 +65,12 @@ export async function recordPayment(_prev: PaymentState, form: FormData): Promis
   }
   if (Object.keys(errors).length || !member || !date || !period) return { errors, values };
 
-  const parts = [
-    { type: "CONTRIBUTION" as const, kobo: contribution },
-    { type: "MEMBERSHIP_FEE" as const, kobo: membershipFee },
-    { type: "INTEREST_PAID" as const, kobo: interestPaid },
-    { type: "LOAN_REPAID" as const, kobo: loanRepaid },
-  ].filter((p) => p.kobo > 0n);
-
-  await db.$transaction(async (tx) => {
-    for (const p of parts) {
-      const entry = await tx.ledgerEntry.create({
-        data: {
-          date,
-          periodId: period.id,
-          memberId: member.id,
-          type: p.type,
-          amountKobo: p.kobo,
-          bankRef: values.bankRef.trim() || null,
-          note: values.note.trim() || null,
-          enteredById: officer.id,
-        },
-      });
-      await audit({ userId: officer.id, action: "payment.record", table: "LedgerEntry", recordId: entry.id, newValue: entry }, tx);
-    }
-    if (interestPaid > 0n || loanRepaid > 0n) await closeLoansIfCleared(member.id, tx);
-  });
-
-  // SMS to the member with their new savings total (sent in phase 4).
-  const totals = await memberYearTotals(member.id, period.year);
-  const after = await memberPosition(member.id);
-  const what = parts.map((p) => `${formatNairaSms(p.kobo)} ${ENTRY_LABELS[p.type].toLowerCase()}`).join(" + ");
-  const loanText = after.principal > 0n ? ` Loan balance: ${formatNairaSms(after.principal)}.` : interestPaid + loanRepaid > 0n && after.interestOwed <= 0n ? " Your loan is fully repaid." : "";
-  await queueSms(
-    member.phone,
-    "payment.recorded",
-    `IPU: ${what} received ${formatDate(date)}. Savings this year: ${formatNairaSms(totals.contributions)}.${loanText} Thank you.`,
+  const amounts = { contribution, membershipFee, interestPaid, loanRepaid };
+  const parts = partsList(amounts);
+  await db.$transaction((tx) =>
+    postMemberPayment({ memberId: member.id, date, periodId: period.id, parts: amounts, bankRef: values.bankRef.trim(), note: values.note.trim(), officerId: officer.id }, tx),
   );
+  await paymentSms(member, period.year, date, amounts);
 
   revalidatePath("/", "layout");
   return {
@@ -132,7 +94,7 @@ export async function reverseEntry(entryId: string, _prev: ReverseState, form: F
 
   const entry = await db.ledgerEntry.findUnique({ where: { id: entryId }, include: { period: true, reversedBy: true } });
   if (!entry) return { error: "Entry not found." };
-  if (!["CONTRIBUTION", "MEMBERSHIP_FEE", "INTEREST_PAID", "LOAN_REPAID"].includes(entry.type)) {
+  if (!["CONTRIBUTION", "MEMBERSHIP_FEE", "INTEREST_PAID", "LOAN_REPAID", "OTHER_INCOME", "EXPENSE"].includes(entry.type)) {
     return { error: "Only payments can be reversed here. Loan payouts and interest charges are corrected by reopening the month." };
   }
   if (entry.reversedBy) return { error: "This entry was already reversed." };

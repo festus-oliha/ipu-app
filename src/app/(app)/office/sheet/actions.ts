@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { formatNaira, formatNairaSms, parseNaira } from "@/lib/money";
 import { OPENING_BANK_KEY, chargeInterest, expectedBank, openingBank } from "@/lib/monthClose";
 import { queueSms } from "@/lib/notify";
-import { MONTH_NAMES, monthLabel } from "@/lib/periods";
+import { MONTH_NAMES, monthLabel, todayLagos } from "@/lib/periods";
 
 export type CloseState = { error?: string; difference?: string; statement?: string };
 
@@ -47,6 +47,13 @@ export async function closeMonth(periodId: string, _prev: CloseState, form: Form
 
   const opening = await openingBank(period.year);
   if (opening === null) return { error: "Enter the opening bank balance for 1 March first." };
+
+  const nextMonth = new Date(Date.UTC(period.month.getUTCFullYear(), period.month.getUTCMonth() + 1, 1));
+  if (todayLagos() < nextMonth.toISOString().slice(0, 10)) {
+    return { error: `${monthLabel(period.month)} has not ended yet. It can be closed from 1 ${monthLabel(nextMonth)}, once the bank statement is in.` };
+  }
+  const waiting = await db.receipt.count({ where: { status: "PENDING", paidOn: { gte: period.month, lt: nextMonth } } });
+  if (waiting) return { error: `${waiting} uploaded receipt${waiting > 1 ? "s are" : " is"} still waiting to be checked for this month. Confirm or reject ${waiting > 1 ? "them" : "it"} first.` };
 
   const typed = String(form.get("statement") ?? "");
   let statement: bigint;

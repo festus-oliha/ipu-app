@@ -48,7 +48,12 @@ export async function chargeInterest(period: { id: string; month: Date }, entere
       _sum: { amountKobo: true },
     });
     const sumOf = (t: string) => activity.find((a) => a.type === t)?._sum.amountKobo ?? 0n;
-    const result = closeLoanMonth(start, { given: sumOf("LOAN_GIVEN"), principalRepaid: sumOf("LOAN_REPAID"), interestPaid: sumOf("INTEREST_PAID") });
+    // Money taken from savings (exit, default) counts like a payment; a refunded credit like a charge.
+    const result = closeLoanMonth(start, {
+      given: sumOf("LOAN_GIVEN"),
+      principalRepaid: sumOf("LOAN_REPAID") + sumOf("LOAN_DEDUCTED"),
+      interestPaid: sumOf("INTEREST_PAID") + sumOf("INTEREST_DEDUCTED") - sumOf("CREDIT_REFUNDED"),
+    });
 
     const loan = await tx.loan.findFirst({ where: { borrowerId: memberId, status: { in: ["DISBURSED", "CLOSED"] } }, orderBy: { disbursedOn: "desc" } });
     if (result.charge > 0n) {

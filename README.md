@@ -23,11 +23,14 @@ You need Git, Node.js (LTS, version 22 or newer) and VS Code installed.
    - `DIRECT_URL` — the Session pooler string, with your password.
    - `SESSION_SECRET` — run `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` and paste the result.
    - `ADMIN_PHONE`, `ADMIN_TEMP_PASSWORD` — your phone number and a temporary password.
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — where receipt photos are kept. In Supabase open
+     **Project Settings → API**, copy the Project URL and the `service_role` secret. You can leave both
+     empty on your computer: receipts are then saved in a local `.uploads` folder (ignored by Git).
 
    `.env` holds secrets. It is ignored by Git and must never be committed.
-5. **Create the tables** (first time, and whenever the schema changes):
+5. **Create or update the tables** (first time, and after every `git pull` that brings a new folder in `prisma/migrations`):
    ```bash
-   npx prisma migrate dev --name init
+   npm run db:deploy
    ```
 6. **Add the first data** (your Admin account and the 2026–2027 year):
    ```bash
@@ -72,6 +75,7 @@ You need Git, Node.js (LTS, version 22 or newer) and VS Code installed.
 
 ## Going live (Netlify)
 
-Connect this GitHub repository in Netlify, then add `DATABASE_URL`, `DIRECT_URL` and `SESSION_SECRET` under
+Connect this GitHub repository in Netlify, then add `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET`,
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` under
 Site configuration → Environment variables. Each push to `main` deploys automatically.
 Run `npm run db:deploy` against the live database when the schema changes.

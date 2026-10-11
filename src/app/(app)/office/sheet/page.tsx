@@ -20,11 +20,15 @@ const STATUS: Record<string, string> = { OPEN: "Open", READY: "Ready for sign-of
 
 export default async function SheetPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const user = await requireRole(...OFFICER_ROLES);
-  const year = await currentYear();
+  const { month } = await searchParams;
+  // A month from another year (e.g. last February, still to be closed) opens that year's sheet.
+  const asked = month ? monthStart(month) : null;
+  const askedPeriod = asked ? await db.period.findFirst({ where: { month: asked }, include: { year: true } }) : null;
+  const year = askedPeriod?.year ?? (await currentYear());
   if (!year) return <p>No open financial year. Run the seed or ask the Admin to open one.</p>;
 
   const periods = await db.period.findMany({ where: { yearId: year.id }, orderBy: { month: "asc" } });
-  const { month } = await searchParams;
+  const otherYears = await db.financialYear.findMany({ where: { id: { not: year.id }, status: { not: "CLOSED" } }, orderBy: { startDate: "asc" } });
   const thisMonth = monthStart(todayLagos().slice(0, 7))!;
   const wanted = (month && monthStart(month)) || thisMonth;
   const period =
@@ -35,6 +39,7 @@ export default async function SheetPage({ searchParams }: { searchParams: Promis
 
   const { rows, totals, bankIn, bankOut, activeMembers } = await buildMonthSheet(period);
   const canRecord = hasRole(user, ...PAYMENT_ROLES) && period.status === "OPEN";
+  const today = todayLagos();
   const opening = await openingBank(year);
   const expected = opening === null ? null : await expectedBank(period, opening);
   const isFirst = period.id === periods[0]?.id;
@@ -54,6 +59,15 @@ export default async function SheetPage({ searchParams }: { searchParams: Promis
       <PageHeader eyebrow={`Monthly sheet · ${year.label}`} title={monthLabel(period.month)}>
         {canRecord ? <LinkButton href="/office/payments/new">Record payment</LinkButton> : null}
       </PageHeader>
+
+      {otherYears.length ? (
+        <p className="-mt-3 text-sm">
+          Also open:{" "}
+          {otherYears.map((y) => (
+            <Link key={y.id} href={`/office/sheet?month=${monthKey(y.startDate)}`} className="font-semibold text-forest underline">{y.label}</Link>
+          ))}
+        </p>
+      ) : null}
 
       <nav aria-label="Months" className="-mx-1 flex gap-1 overflow-x-auto pb-1">
         {periods.map((p) => {
@@ -161,6 +175,8 @@ export default async function SheetPage({ searchParams }: { searchParams: Promis
             hasRole(user, "TREASURER") ? (
               earlierOpen ? (
                 <p className="text-sm text-muted">Close {monthLabel(earlierOpen.month)} first. Months are closed in order.</p>
+              ) : today < monthKey(new Date(Date.UTC(period.month.getUTCFullYear(), period.month.getUTCMonth() + 1, 1))) + "-01" ? (
+                <p className="text-sm text-muted">This month can be closed once it has ended and the bank statement is in.</p>
               ) : opening === null ? (
                 <p className="text-sm text-muted">Enter the opening bank balance (on the March sheet) before closing.</p>
               ) : (

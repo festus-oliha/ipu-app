@@ -26,6 +26,9 @@ export const ENTRY_LABELS: Record<EntryType, string> = {
   INTEREST_CHARGED: "Interest charged",
   DEDUCTION: "Deduction",
   REVERSAL: "Reversal",
+  LOAN_DEDUCTED: "Loan taken from savings",
+  INTEREST_DEDUCTED: "Interest taken from savings",
+  CREDIT_REFUNDED: "Interest credit refunded",
 };
 
 /** Money in (+), money out (−) or no cash (0) for the bank balance. */
@@ -43,7 +46,13 @@ export const BANK_EFFECT: Record<EntryType, 1 | -1 | 0> = {
   INTEREST_CHARGED: 0,
   DEDUCTION: 0,
   REVERSAL: 0,
+  LOAN_DEDUCTED: 0,
+  INTEREST_DEDUCTED: 0,
+  CREDIT_REFUNDED: 0,
 };
+
+/** Every row type that changes a member's loan account. */
+export const LOAN_TYPES: EntryType[] = ["LOAN_GIVEN", "LOAN_REPAID", "INTEREST_CHARGED", "INTEREST_PAID", "LOAN_DEDUCTED", "INTEREST_DEDUCTED", "CREDIT_REFUNDED"];
 
 /** A member's totals for one financial year, from live ledger rows. */
 export async function memberYearTotals(memberId: string, year: { id: string }) {

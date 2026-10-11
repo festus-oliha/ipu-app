@@ -6,6 +6,7 @@ import {
   defaultRecovery,
   dividend,
   exitPayout,
+  settle,
   monthlyInterest,
   yearEndPayout,
   type LoanPosition,
@@ -134,5 +135,27 @@ describe("year-end and exit", () => {
       fromGuarantor: N(180000),
       stillOwed: 0n,
     });
+  });
+});
+
+describe("settling: what is taken from savings", () => {
+  it("clears interest first, then the loan, and pays out the rest", () => {
+    expect(settle({ contributions: N(100000), dividend: 0n, principal: N(30000), interestOwed: N(750) })).toEqual({
+      credit: 0n, interestDeducted: N(750), loanDeducted: N(30000), payout: N(69250), shortfall: 0n,
+    });
+  });
+  it("refunds an interest credit into the payout", () => {
+    const r = settle({ contributions: N(60000), dividend: N(2520), principal: N(20000), interestOwed: -N(7000) });
+    expect(r.credit).toBe(N(7000));
+    expect(r.payout).toBe(N(49520));
+  });
+  it("a debtor's savings go to interest then loan; the rest stays owed", () => {
+    expect(settle({ contributions: N(200000), dividend: N(8400), principal: N(370000), interestOwed: N(78750) })).toEqual({
+      credit: 0n, interestDeducted: N(78750), loanDeducted: N(129650), payout: 0n, shortfall: N(240350),
+    });
+  });
+  it("agrees with the payout formula whenever the member is not a debtor", () => {
+    const input = { contributions: N(240000), dividend: N(10080), loanBalance: N(100000), interestOwed: N(2500) };
+    expect(settle({ ...input, principal: input.loanBalance }).payout).toBe(yearEndPayout(input).payout);
   });
 });

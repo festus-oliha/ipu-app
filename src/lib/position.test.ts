@@ -55,4 +55,22 @@ describe("loan account from the ledger matches the workbook", () => {
   it("other entry types do not touch the loan account", () => {
     expect(positionFromRows([{ type: "CONTRIBUTION", amountKobo: N(10000) }, { type: "MEMBERSHIP_FEE", amountKobo: N(500) }])).toEqual({ principal: 0n, interestOwed: 0n });
   });
+
+  it("money taken from savings clears the loan; a refunded credit brings interest back to zero", () => {
+    expect(
+      positionFromRows([
+        { type: "LOAN_GIVEN", amountKobo: N(100000) },
+        { type: "INTEREST_CHARGED", amountKobo: N(2500) },
+        { type: "LOAN_DEDUCTED", amountKobo: N(100000) },
+        { type: "INTEREST_DEDUCTED", amountKobo: N(2500) },
+      ]),
+    ).toEqual({ principal: 0n, interestOwed: 0n });
+    expect(
+      positionFromRows([
+        { type: "INTEREST_CHARGED", amountKobo: N(2500) },
+        { type: "INTEREST_PAID", amountKobo: N(4000) },
+        { type: "CREDIT_REFUNDED", amountKobo: N(1500) },
+      ]),
+    ).toEqual({ principal: 0n, interestOwed: 0n });
+  });
 });

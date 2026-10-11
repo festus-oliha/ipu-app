@@ -35,6 +35,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
   return (
     <div className="flex flex-col gap-6">
       <PageHeader eyebrow="Office" title="Members">
+        <LinkButton href="/office/exits" variant="secondary">Exits</LinkButton>
         {canEdit ? <LinkButton href="/office/members/new">Add member</LinkButton> : null}
       </PageHeader>
 
