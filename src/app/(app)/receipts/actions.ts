@@ -49,7 +49,13 @@ export async function uploadReceipt(_prev: UploadState, form: FormData): Promise
 
   const id = randomUUID();
   const fileKey = `receipts/${member.id}/${id}.${FILE_TYPES[file.type]}`;
-  await putFile(fileKey, file.bytes, file.type);
+  try {
+    await putFile(fileKey, file.bytes, file.type);
+  } catch (e) {
+    // Show the reason instead of a blank error page; it is also in the Netlify function log.
+    console.error("[receipt upload]", e);
+    return { values, error: `The receipt could not be saved: ${(e as Error).message}. Please try again later, or tell the Admin.` };
+  }
   const receipt = await db.receipt.create({
     data: {
       id,

@@ -42,18 +42,24 @@ function supabase() {
     const headers: Record<string, string> = key.startsWith("sb_") ? { apikey: key } : { Authorization: `Bearer ${key}`, apikey: key };
     return { url, headers };
   }
-  if (process.env.NODE_ENV === "production" && process.env.NETLIFY) {
+  // On Netlify the disk is read-only, so the local folder cannot be used there.
+  const onNetlify = Boolean(process.env.NETLIFY || process.env.SITE_ID || process.env.NETLIFY_IMAGES_CDN_DOMAIN || process.env.AWS_LAMBDA_FUNCTION_NAME);
+  if (process.env.NODE_ENV === "production" && onNetlify) {
     throw new SetupError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are needed to store receipts.");
   }
   return null;
 }
 
 async function createBucket(sb: NonNullable<ReturnType<typeof supabase>>) {
-  await fetch(`${sb.url}/storage/v1/bucket`, {
+  const res = await fetch(`${sb.url}/storage/v1/bucket`, {
     method: "POST",
     headers: { ...sb.headers, "Content-Type": "application/json" },
     body: JSON.stringify({ id: BUCKET, name: BUCKET, public: false, file_size_limit: MAX_FILE_BYTES }),
   });
+  if (!res.ok) {
+    const body = await res.text();
+    if (!/already exists|Duplicate/i.test(body)) throw new Error(`could not create the "${BUCKET}" storage bucket (${res.status}): ${body}`);
+  }
 }
 
 export async function putFile(key: string, bytes: Uint8Array, type: FileType) {
