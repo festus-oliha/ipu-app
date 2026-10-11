@@ -35,7 +35,15 @@ export function sniffType(bytes: Uint8Array): FileType | null {
 }
 
 function supabase() {
-  const url = process.env.SUPABASE_URL?.trim().replace(/\/$/, "");
+  // Only the site part is used (https://xxxx.supabase.co), even if the
+  // "/rest/v1" API address was pasted instead.
+  const raw = process.env.SUPABASE_URL?.trim();
+  let url: string | undefined;
+  try {
+    url = raw ? new URL(raw).origin : undefined;
+  } catch {
+    throw new SetupError(`SUPABASE_URL is not a web address (it should look like https://xxxx.supabase.co).`);
+  }
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   // New Supabase secret keys (sb_secret_…) go only in the apikey header; legacy service_role JWTs also as Bearer.
   if (url && key) {
