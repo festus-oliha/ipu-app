@@ -25,7 +25,7 @@ import { randomBytes } from "node:crypto";
 import ExcelJS from "exceljs";
 import { hash } from "@node-rs/argon2";
 import { db } from "@/lib/db";
-import { chargeInterest, expectedBank, monthEnd, OPENING_BANK_KEY } from "@/lib/monthClose";
+import { chargeInterest, expectedBank, OPENING_BANK_KEY } from "@/lib/monthClose";
 import { loanLimit } from "@/lib/rules";
 import { normalizePhone } from "@/lib/phone";
 import { nextMemberNo } from "@/lib/memberInput";
