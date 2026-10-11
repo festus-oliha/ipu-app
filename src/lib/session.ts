@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { getIronSession, type SessionOptions } from "iron-session";
+import { requireEnv } from "./config";
 
 export type SessionData = {
   userId?: string;
@@ -9,10 +10,7 @@ export type SessionData = {
 const THIRTY_MINUTES = 30 * 60;
 
 function options(): SessionOptions {
-  const password = process.env.SESSION_SECRET;
-  if (!password || password.length < 32) {
-    throw new Error("SESSION_SECRET must be set to at least 32 random characters (see .env.example).");
-  }
+  const password = requireEnv("SESSION_SECRET", 32);
   return {
     password,
     cookieName: "ipu_session",

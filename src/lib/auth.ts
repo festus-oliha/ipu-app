@@ -50,3 +50,37 @@ export function hasRole(user: CurrentUser, ...roles: Role[]) {
 }
 
 export const OFFICER_ROLES: Role[] = ["ADMIN", "PRESIDENT", "TREASURER", "SECRETARY", "AUDITOR"];
+
+export const PAYMENT_ROLES: Role[] = ["ADMIN", "PRESIDENT", "TREASURER", "SECRETARY"];
+export const MEMBER_ADMIN_ROLES: Role[] = ["ADMIN", "SECRETARY"];
+
+/** Use in pages: signed-in user holding one of the roles, else back to home. */
+export async function requireRole(...roles: Role[]): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (user.mustChangePassword) redirect("/change-password");
+  if (!hasRole(user, ...roles)) redirect("/");
+  return user;
+}
+
+export class NotAllowedError extends Error {
+  constructor() {
+    super("You are not allowed to do this.");
+  }
+}
+
+/** Use in server actions: never trust that a hidden button stops anyone. */
+export async function actionUser(...roles: Role[]): Promise<CurrentUser> {
+  const user = await findCurrentUser();
+  if (!user || user.mustChangePassword) redirect("/login");
+  if (roles.length && !hasRole(user, ...roles)) throw new NotAllowedError();
+  return user;
+}
+
+/** A temporary password that is easy to read out over the phone: e.g. "ipu-4827-kz". */
+export function temporaryPassword(): string {
+  const letters = "abcdefghjkmnpqrstuvwxyz";
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  const digits = Array.from(bytes.slice(0, 4), (b) => String(b % 10)).join("");
+  const tail = Array.from(bytes.slice(4), (b) => letters[b % letters.length]).join("");
+  return `ipu-${digits}-${tail}`;
+}
