@@ -15,9 +15,6 @@ export function AuthShell({ title, children }: { title: string; children: React.
           <h1 className="font-display text-2xl text-ink">{title}</h1>
           <div className="mt-5">{children}</div>
         </section>
-        <p className="mt-auto pt-8 text-center text-xs text-muted">
-          198, Old Sapele Road, Benin City · +234 907 672 9480
-        </p>
       </div>
     </main>
   );
