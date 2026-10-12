@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Card, PageHeader, Stat } from "@/components/ui";
+import { Card, LinkButton, PageHeader, Stat } from "@/components/ui";
+import { lettersFor } from "@/lib/documents";
 import { MEMBER_ADMIN_ROLES, OFFICER_ROLES, hasRole, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { LOAN_STATUS_LABELS, memberPosition } from "@/lib/loans";
@@ -84,6 +85,15 @@ export default async function LoanPage({ params }: { params: Promise<{ id: strin
       ) : null}
 
       {panel}
+
+      {lettersFor(loan.status).length ? (
+        <Card title="Letters">
+          <p className="mb-3 text-sm text-muted">Print or save as PDF, with the union letterhead and signature lines.</p>
+          <div className="flex flex-wrap gap-2">
+            {lettersFor(loan.status).map((l) => <LinkButton key={l.kind} href={`/documents/loan/${loan.id}?letter=${l.kind}`} variant="secondary">{l.label}</LinkButton>)}
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat label="Loan balance now" value={formatNaira(position.principal, { compact: true })} note="All of this member's loans" />

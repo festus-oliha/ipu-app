@@ -7,7 +7,9 @@ import { memberPosition } from "@/lib/loans";
 import { formatNaira } from "@/lib/money";
 import { currentYear, formatDate } from "@/lib/periods";
 import { displayPhone } from "@/lib/phone";
+import { PhotoForm } from "@/components/PhotoForm";
 import { DetailsForm, PasswordForm } from "./ProfileForms";
+import { uploadPhoto } from "./photo";
 
 export const metadata: Metadata = { title: "My profile" };
 
@@ -62,6 +64,23 @@ export default async function ProfilePage() {
           To change your phone number or bank account, ask the Secretary or Admin. This protects your payouts if someone else learns your password.
         </p>
       </Card>
+
+      {member && member.status !== "EXITED" ? (
+        <Card title="My documents">
+          <div className="flex flex-wrap gap-2">
+            <LinkButton href={`/documents/id-card/${member.id}`} variant="secondary">ID card</LinkButton>
+            <LinkButton href={`/documents/certificate/${member.id}`} variant="secondary">Membership certificate</LinkButton>
+            <LinkButton href={`/statement/${member.id}`} variant="secondary">Statement</LinkButton>
+          </div>
+          <p className="mt-3 text-sm text-muted">Loan letters are on each loan&apos;s page.</p>
+        </Card>
+      ) : null}
+
+      {member ? (
+        <Card title="Photo for my ID card">
+          <PhotoForm action={uploadPhoto.bind(null, member.id)} memberId={member.id} name={[member.title, member.fullName].filter(Boolean).join(" ")} version={member.photoKey} />
+        </Card>
+      ) : null}
 
       {member ? (
         <Card title="Contact details">

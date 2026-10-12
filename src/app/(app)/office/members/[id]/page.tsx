@@ -11,6 +11,8 @@ import { resetMemberPassword, setMemberRoles, updateMember } from "../actions";
 import { MemberForm } from "../MemberForm";
 import { ResetPasswordForm, RolesForm } from "./AccountForms";
 import { PaymentHistory } from "@/components/PaymentHistory";
+import { PhotoForm } from "@/components/PhotoForm";
+import { uploadPhoto } from "@/app/(app)/profile/photo";
 
 export const metadata: Metadata = { title: "Member" };
 
@@ -32,6 +34,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
       <PageHeader eyebrow={member.memberNo} title={[member.title, member.fullName].filter(Boolean).join(" ")}>
         <StatusBadge status={member.status} />
         <LinkButton href={`/statement/${member.id}`} variant="secondary">Statement</LinkButton>
+        {member.status !== "EXITED" ? <LinkButton href={`/documents/id-card/${member.id}`} variant="secondary">ID card</LinkButton> : null}
+        {member.status !== "EXITED" ? <LinkButton href={`/documents/certificate/${member.id}`} variant="secondary">Certificate</LinkButton> : null}
       </PageHeader>
       <p className="-mt-3 text-sm text-muted">
         {displayPhone(member.phone)}
@@ -52,6 +56,9 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
 
       {canEdit ? (
         <>
+          <Card title="Photo for the ID card">
+            <PhotoForm action={uploadPhoto.bind(null, member.id)} memberId={member.id} name={[member.title, member.fullName].filter(Boolean).join(" ")} version={member.photoKey} />
+          </Card>
           <Card title="Details">
             <MemberForm
               action={updateMember.bind(null, member.id)}

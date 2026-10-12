@@ -165,6 +165,7 @@ model Member {
   address               String?
   emergencyName         String?
   emergencyPhone        String?
+  photoKey              String?      // passport photo in file storage, for the ID card
   usualMonthlyKobo      BigInt       @default(0) // basis of the loan limit (× 12)
   status                MemberStatus @default(ACTIVE)
   joinedAt              DateTime     @default(now())

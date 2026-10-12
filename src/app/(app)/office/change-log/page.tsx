@@ -39,6 +39,7 @@ const ACTIONS: Record<string, string> = {
   "member.roles": "Changed member's roles",
   "member.update": "Updated member",
   "member.self_update": "Updated own details",
+  "member.photo": "Changed photo",
   "messages.retry": "Retried messages",
   "messages.test": "Sent test message",
   "month.close": "Closed month",
