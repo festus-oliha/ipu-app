@@ -8,13 +8,14 @@ import { owedOf, recoveryPlan } from "@/lib/debtors";
 import { officerNames } from "@/lib/ledger";
 import { positionsThrough } from "@/lib/loans";
 import { formatNaira } from "@/lib/money";
-import { formatDate, todayLagos } from "@/lib/periods";
+import { formatDate, monthLabel, todayLagos } from "@/lib/periods";
+import { DEFAULT_AFTER_MONTHS, interestArrearsMonths, notContributing, yearEndNoticeOpen } from "@/lib/notices";
 import { displayPhone } from "@/lib/phone";
 import { declareDefault, logContact, recoverFromSavings, referToLegal, sendReminder, updateLegal } from "./actions";
 
 export const metadata: Metadata = { title: "Debtors" };
 
-const FILTERS = [["", "Everyone owing"], ["interest", "Interest unpaid"], ["default", "In default"], ["yearend", "Year-end debtors"], ["legal", "Legal"]] as const;
+const FILTERS = [["", "Everyone owing"], ["interest", "Interest unpaid"], ["contrib", "Not contributing"], ["default", "In default"], ["yearend", "Year-end debtors"], ["legal", "Legal"]] as const;
 const CHANNELS = [{ value: "CALL", label: "Phone call" }, { value: "SMS", label: "SMS / WhatsApp" }, { value: "IN_APP", label: "Visit / in person" }, { value: "EMAIL", label: "Email" }];
 const LEGAL = ["Referred", "Letter sent", "In court", "Settled", "Closed"].map((s) => ({ value: s, label: s }));
 
@@ -34,8 +35,12 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
     },
   });
   const rows = members.map((m) => ({ m, p: positions.get(m.id)!, loan: m.loans[0], legal: m.legalReferrals[0], debtor: m.settlements[0] }));
-  const shown = rows.filter(({ p, loan, legal, debtor }) =>
-    show === "interest" ? p.interestOwed > 0n : show === "default" ? loan?.status === "DEFAULTED" : show === "yearend" ? Boolean(debtor) : show === "legal" ? legal && legal.status !== "Closed" : true,
+  const today = todayLagos();
+  const missing = new Map((await notContributing(today)).map((x) => [x.member.id, x.months]));
+  const arrears = new Map(await Promise.all(rows.map(async (r) => [r.m.id, await interestArrearsMonths(r.m.id)] as const)));
+  const yearEndOpen = yearEndNoticeOpen(today);
+  const shown = rows.filter(({ m, p, loan, legal, debtor }) =>
+    show === "contrib" ? missing.has(m.id) : show === "interest" ? p.interestOwed > 0n : show === "default" ? loan?.status === "DEFAULTED" : show === "yearend" ? Boolean(debtor) : show === "legal" ? legal && legal.status !== "Closed" : true,
   );
   const plans = new Map(await Promise.all(rows.filter((r) => r.loan?.status === "DEFAULTED").map(async (r) => [r.loan!.id, await recoveryPlan(r.loan!.id)] as const)));
   const names = await officerNames(rows.flatMap((r) => r.m.contactLogs.map((c) => c.byId)));
@@ -52,6 +57,10 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
         <Stat label="Total owed" value={formatNaira(total, { compact: true })} />
         <Stat label="Interest unpaid" value={formatNaira(interest, { compact: true })} note={`${rows.filter((r) => r.p.interestOwed > 0n).length} members`} />
         <Stat label="In default / legal" value={`${rows.filter((r) => r.loan?.status === "DEFAULTED").length} / ${rows.filter((r) => r.legal && r.legal.status !== "Closed").length}`} />
+      </div>
+      <div className="flex flex-wrap gap-2 text-sm">
+        {missing.size ? <Link href="/documents/notice/all?kind=contribution" className="rounded-lg border border-line bg-white px-3 py-2 font-semibold text-forest">Print {missing.size} contribution notice{missing.size === 1 ? "" : "s"}</Link> : null}
+        <Link href="/documents/notice/all?kind=yearend" className={`rounded-lg border border-line bg-white px-3 py-2 font-semibold ${yearEndOpen ? "text-forest" : "text-muted"}`}>Print year-end notices{yearEndOpen ? "" : " (January–February)"}</Link>
       </div>
       <nav aria-label="Filter" className="-mx-1 flex gap-1 overflow-x-auto pb-1">
         {FILTERS.map(([v, l]) => (
@@ -73,6 +82,8 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
               </div>
               <div className="flex flex-wrap gap-1.5 text-xs font-semibold">
                 {loan?.status === "DEFAULTED" ? <span className="rounded-full bg-danger/10 px-2.5 py-1 text-danger">In default</span> : null}
+                {arrears.get(m.id) ? <span className="rounded-full bg-danger/10 px-2.5 py-1 text-danger">Interest unpaid {arrears.get(m.id)} month{arrears.get(m.id) === 1 ? "" : "s"}</span> : null}
+                {missing.has(m.id) ? <span className="rounded-full bg-gold/15 px-2.5 py-1 text-gold-dark">No contribution: {missing.get(m.id)!.map((d) => monthLabel(d).split(" ")[0].slice(0, 3)).join(", ")}</span> : null}
                 {debtor ? <span className="rounded-full bg-gold/15 px-2.5 py-1 text-gold-dark">Year-end debtor {debtor.year.label}{debtor.debtorPlan === "PAY_UP" && debtor.debtorDueOn ? `, pay by ${formatDate(debtor.debtorDueOn)}${debtor.debtorDueOn < now ? " (overdue)" : ""}` : ", carried over"}</span> : null}
                 {legal && legal.status !== "Closed" ? <span className="rounded-full bg-ink/10 px-2.5 py-1">Legal: {legal.status}</span> : null}
               </div>
@@ -81,6 +92,11 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
               Loan <span className="font-semibold">{formatNaira(p.principal)}</span>
               {p.interestOwed > 0n ? <> · interest unpaid <span className="font-semibold text-danger">{formatNaira(p.interestOwed)}</span></> : null}
               {" "}· total <span className="font-semibold">{formatNaira(owedOf(p))}</span>
+            </p>
+            <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              {missing.has(m.id) ? <Link href={`/documents/notice/${m.id}?kind=contribution`} className="text-forest underline">Contribution notice</Link> : null}
+              {yearEndOpen ? <Link href={`/documents/notice/${m.id}?kind=yearend`} className="text-forest underline">Year-end notice</Link> : null}
+              {loan ? <Link href={`/documents/loan/${loan.id}`} className="text-forest underline">Loan letters</Link> : null}
             </p>
             {m.contactLogs.length ? (
               <ul className="mt-2 text-xs text-muted">
@@ -102,7 +118,10 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
                       ]} />
                     </>
                   ) : null}
-                  {loan?.status === "DISBURSED" && hasRole(user, "PRESIDENT", "TREASURER") ? (
+                  {loan?.status === "DISBURSED" && hasRole(user, "PRESIDENT", "TREASURER") && (arrears.get(m.id) ?? 0) < DEFAULT_AFTER_MONTHS ? (
+                    <p className="text-sm text-muted">Default can be declared after {DEFAULT_AFTER_MONTHS} months of unpaid interest{arrears.get(m.id) ? ` (now ${arrears.get(m.id)})` : ""}.</p>
+                  ) : null}
+                  {loan?.status === "DISBURSED" && hasRole(user, "PRESIDENT", "TREASURER") && (arrears.get(m.id) ?? 0) >= DEFAULT_AFTER_MONTHS ? (
                     <ActionForm action={declareDefault.bind(null, loan.id)} submit="Declare loan in default" tone="danger"
                       intro={<p className="text-sm text-muted">Borrower and guarantor are told at once. After 7 days the Treasurer can take what is owed from the borrower&apos;s savings, then the guarantor&apos;s.</p>}
                       fields={[{ name: "reason", label: "Reason (months unpaid, contact attempts)", wide: true }]} />

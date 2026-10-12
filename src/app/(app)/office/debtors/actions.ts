@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { DEFAULT_AFTER_MONTHS, interestArrearsMonths } from "@/lib/notices";
 import type { FormResult } from "@/components/ActionForm";
 import { audit } from "@/lib/audit";
 import { PAYMENT_ROLES, actionUser } from "@/lib/auth";
@@ -45,6 +46,11 @@ export async function declareDefault(loanId: string, _prev: FormResult, form: Fo
   const loan = await db.loan.findUnique({ where: { id: loanId }, include: { borrower: true, guarantor: true } });
   if (!loan || loan.status !== "DISBURSED") return { error: "Only a paid-out loan can be declared in default." };
   if (loan.borrower.userId === user.id) return { error: "You cannot act on your own loan." };
+  // Default only after interest has gone unpaid for two months in a row (year end is settled separately).
+  const arrears = await interestArrearsMonths(loan.borrowerId);
+  if (arrears < DEFAULT_AFTER_MONTHS) {
+    return { error: `A loan can be declared in default only after ${DEFAULT_AFTER_MONTHS} months of unpaid interest. ${arrears ? `Interest is unpaid for ${arrears} month so far.` : "Interest is up to date."} Send a reminder or record contact instead.` };
+  }
   const reason = String(form.get("reason") ?? "").trim();
   if (reason.length < 10) return { errors: { reason: "Explain why (at least 10 characters), e.g. months unpaid and contact attempts." } };
   const p = await memberPosition(loan.borrowerId);

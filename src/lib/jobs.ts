@@ -6,7 +6,8 @@ import { positionsThrough } from "./loans";
 import { sendEmail } from "./messaging";
 import { formatNaira, formatNairaSms } from "./money";
 import { flushOutbox, queueEmail, queueSms } from "./notify";
-import { MONTH_NAMES, formatDate, todayLagos } from "./periods";
+import { notContributing } from "./notices";
+import { MONTH_NAMES, formatDate, monthLabel, todayLagos } from "./periods";
 
 /**
  * The daily jobs from System Design §5. The hourly scheduler calls runJobs();
@@ -158,6 +159,21 @@ const JOBS: { name: string; due: (t: Today) => string | null; run: (t: Today) =>
         await queueSms(s.member.phone, "debtor.reminder", `IPU: You still owe ${formatNairaSms(p.principal + (p.interestOwed > 0n ? p.interestOwed : 0n))}. Please pay by ${s.debtorDueOn ? formatDate(s.debtorDueOn) : "the agreed date"} into GT Bank 0033550876.`);
       }
       return `${n} reminder(s)`;
+    },
+  },
+  {
+    // 5th of each month (not February, when the year-end notice applies): a borrower who
+    // paid no contribution for the last two months gets a notice in the third month.
+    name: "loan.contribution_notice",
+    due: (t) => (t.d === 5 && t.m !== 2 ? t.iso.slice(0, 7) : null),
+    run: async (t) => {
+      const list = await notContributing(t.iso);
+      for (const { member, months } of list) {
+        const owing = member.usualMonthlyKobo > 0n ? ` (${formatNairaSms(member.usualMonthlyKobo * BigInt(months.length))})` : "";
+        await queueSms(member.phone, "loan.contribution_notice", `IPU NOTICE: No contribution received for ${months.map((m) => monthLabel(m).split(" ")[0]).join(", ")} while your loan is running. Please pay the missed contributions${owing} into GT Bank 0033550876 this month. Interest alone is not enough.`);
+        await db.auditLog.create({ data: { action: "notice.contribution", table: "Member", recordId: member.id, newValue: { months: months.map((m) => m.toISOString().slice(0, 7)) } } });
+      }
+      return `${list.length} notice(s)`;
     },
   },
   {

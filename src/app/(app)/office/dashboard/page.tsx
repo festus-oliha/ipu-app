@@ -9,6 +9,7 @@ import { formatNaira } from "@/lib/money";
 import { expectedBank, openingBank } from "@/lib/monthClose";
 import { currentYear, formatDate, monthKey, monthLabel, todayLagos } from "@/lib/periods";
 import { yearChangeReminders } from "@/lib/yearEnd";
+import { notContributing, yearEndNoticeOpen } from "@/lib/notices";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -79,6 +80,9 @@ export default async function DashboardPage() {
   if (defaulted) todo.push({ text: `${defaulted} defaulted loan${defaulted === 1 ? "" : "s"} to recover`, href: "/office/debtors" });
   const proposed = investments.filter((i) => i.status === "PROPOSED").length;
   if (proposed) todo.push({ text: `${proposed} investment${proposed === 1 ? "" : "s"} waiting for approval`, href: "/office/bank" });
+  const notPaying = await notContributing(today);
+  if (notPaying.length) todo.push({ text: `${notPaying.length} borrower${notPaying.length === 1 ? " has" : "s have"} paid no contribution for 2 months or more: notice due`, href: "/office/debtors?show=contrib" });
+  if (yearEndNoticeOpen(today) && borrowers + inArrears > 0) todo.push({ text: "Year end is near: print year-end notices for members who still owe", href: "/documents/notice/all?kind=yearend" });
   if (failed) todo.push({ text: `${failed} message${failed === 1 ? "" : "s"} failed to send`, href: "/office/messages?show=FAILED" });
   if (hasRole(user, "ADMIN")) todo.push(...(await yearChangeReminders(today)));
   if (noPhone && hasRole(user, "ADMIN", "SECRETARY")) todo.push({ text: `${noPhone} member${noPhone === 1 ? " has" : "s have"} no phone number, so cannot sign in or get SMS`, href: "/office/members" });
