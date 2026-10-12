@@ -4,6 +4,7 @@ import { db } from "./db";
 import { BANK_EFFECT, LIVE } from "./ledger";
 import { positionsThrough } from "./loans";
 import { closeLoanMonth } from "./rules";
+import { settingsAt } from "./settings";
 
 type Tx = Prisma.TransactionClient;
 
@@ -37,6 +38,8 @@ export async function chargeInterest(period: { id: string; month: Date }, entere
   const previousMonth = new Date(Date.UTC(period.month.getUTCFullYear(), period.month.getUTCMonth() - 1, 1));
   const [before, now] = await Promise.all([positionsThrough(previousMonth, tx), positionsThrough(period.month, tx)]);
 
+  // The interest rate in force for this month (a later change does not alter past months).
+  const rules = await settingsAt(period.month);
   const charged: { memberId: string; charge: bigint; nextOwed: bigint; closing: bigint }[] = [];
   for (const [memberId, end] of now) {
     const start = before.get(memberId) ?? { principal: 0n, interestOwed: 0n };
@@ -53,12 +56,12 @@ export async function chargeInterest(period: { id: string; month: Date }, entere
       given: sumOf("LOAN_GIVEN"),
       principalRepaid: sumOf("LOAN_REPAID") + sumOf("LOAN_DEDUCTED"),
       interestPaid: sumOf("INTEREST_PAID") + sumOf("INTEREST_DEDUCTED") - sumOf("CREDIT_REFUNDED"),
-    });
+    }, rules);
 
     const loan = await tx.loan.findFirst({ where: { borrowerId: memberId, status: { in: ["DISBURSED", "CLOSED"] } }, orderBy: { disbursedOn: "desc" } });
     if (result.charge > 0n) {
       await tx.ledgerEntry.create({
-        data: { date: monthEnd(period.month), periodId: period.id, memberId, type: "INTEREST_CHARGED", amountKobo: result.charge, loanId: loan?.id, note: "Monthly interest, ₦25 per ₦1,000", enteredById },
+        data: { date: monthEnd(period.month), periodId: period.id, memberId, type: "INTEREST_CHARGED", amountKobo: result.charge, loanId: loan?.id, note: `Monthly interest, ₦${rules.interestPer1000} per ₦1,000`, enteredById },
       });
     }
     if (loan) {

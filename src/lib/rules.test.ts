@@ -159,3 +159,13 @@ describe("settling: what is taken from savings", () => {
     expect(settle({ ...input, principal: input.loanBalance }).payout).toBe(yearEndPayout(input).payout);
   });
 });
+
+describe("loan months from Settings", () => {
+  it("builds a range that wraps past December", async () => {
+    const { monthRange, loanMonthsText, DEFAULT_RULES } = await import("./rules");
+    expect(monthRange(3, 12)).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(monthRange(11, 1)).toEqual([11, 12, 1]);
+    expect(loanMonthsText(DEFAULT_RULES)).toBe("March to December");
+    expect(loanMonthsText({ ...DEFAULT_RULES, loanMonths: monthRange(4, 11) })).toBe("April to November");
+  });
+});

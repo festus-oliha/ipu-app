@@ -9,7 +9,8 @@ import { officerNames } from "@/lib/ledger";
 import { positionsThrough } from "@/lib/loans";
 import { formatNaira } from "@/lib/money";
 import { formatDate, monthLabel, todayLagos } from "@/lib/periods";
-import { DEFAULT_AFTER_MONTHS, interestArrearsMonths, notContributing, yearEndNoticeOpen } from "@/lib/notices";
+import { interestArrearsMonths, notContributing, yearEndNoticeOpen } from "@/lib/notices";
+import { settingsAt } from "@/lib/settings";
 import { displayPhone } from "@/lib/phone";
 import { declareDefault, logContact, recoverFromSavings, referToLegal, sendReminder, updateLegal } from "./actions";
 
@@ -36,6 +37,7 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
   });
   const rows = members.map((m) => ({ m, p: positions.get(m.id)!, loan: m.loans[0], legal: m.legalReferrals[0], debtor: m.settlements[0] }));
   const today = todayLagos();
+  const { defaultAfterMonths: DEFAULT_AFTER_MONTHS, noticeDays } = await settingsAt();
   const missing = new Map((await notContributing(today)).map((x) => [x.member.id, x.months]));
   const arrears = new Map(await Promise.all(rows.map(async (r) => [r.m.id, await interestArrearsMonths(r.m.id)] as const)));
   const yearEndOpen = yearEndNoticeOpen(today);
@@ -123,7 +125,7 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
                   ) : null}
                   {loan?.status === "DISBURSED" && hasRole(user, "PRESIDENT", "TREASURER") && (arrears.get(m.id) ?? 0) >= DEFAULT_AFTER_MONTHS ? (
                     <ActionForm action={declareDefault.bind(null, loan.id)} submit="Declare loan in default" tone="danger"
-                      intro={<p className="text-sm text-muted">Borrower and guarantor are told at once. After 7 days the Treasurer can take what is owed from the borrower&apos;s savings, then the guarantor&apos;s.</p>}
+                      intro={<p className="text-sm text-muted">Borrower and guarantor are told at once. After {noticeDays} days the Treasurer can take what is owed from the borrower&apos;s savings, then the guarantor&apos;s.</p>}
                       fields={[{ name: "reason", label: "Reason (months unpaid, contact attempts)", wide: true }]} />
                   ) : null}
                   {loan?.status === "DEFAULTED" && plan ? (

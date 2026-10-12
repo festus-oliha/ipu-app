@@ -4,7 +4,12 @@ import { useActionState } from "react";
 import { Field, FormError, SubmitButton } from "@/components/Field";
 import { login, type FormState } from "./actions";
 
-export function LoginForm() {
+const adminDisplay = (p: string) => {
+  const n = p.replace(/^\+234/, "0");
+  return `${n.slice(0, 4)} ${n.slice(4, 7)} ${n.slice(7)}`;
+};
+
+export function LoginForm({ adminPhone }: { adminPhone: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(login, {});
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -21,9 +26,14 @@ export function LoginForm() {
       <Field label="Password" name="password" type="password" autoComplete="current-password" required />
       <FormError message={state.error} />
       <SubmitButton pending={pending}>Sign in</SubmitButton>
-      <p className="text-center text-sm text-muted">
-        Forgot your password? Ask the Admin or Secretary to reset it.
-      </p>
+      <div className="rounded-lg bg-sand p-3 text-center text-sm text-ink">
+        <p className="font-semibold">Forgot your password?</p>
+        <p className="mt-1 text-muted">Call or send a message to the Admin, who will give you a new one.</p>
+        <p className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1">
+          <a href={`tel:${adminPhone}`} className="font-semibold text-forest underline">Call {adminDisplay(adminPhone)}</a>
+          <a href={`https://wa.me/${adminPhone.replace(/^\+/, "")}`} className="font-semibold text-forest underline">WhatsApp</a>
+        </p>
+      </div>
     </form>
   );
 }

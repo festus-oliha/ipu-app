@@ -90,7 +90,8 @@ export async function updateMember(memberId: string, _prev: MemberFormState, for
 export type ResetState = { tempPassword?: string; error?: string };
 
 export async function resetMemberPassword(memberId: string): Promise<ResetState> {
-  const officer = await actionUser(...MEMBER_ADMIN_ROLES);
+  // Forgotten passwords are handled by the Admin only.
+  const officer = await actionUser("ADMIN");
   const member = await db.member.findUnique({ where: { id: memberId } });
   if (!member) return { error: "This member no longer exists." };
   if (!member.userId && !member.phone) return { error: "Add the member's phone number first (Edit details); the login uses it." };

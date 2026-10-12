@@ -6,7 +6,8 @@ import { PrintButton } from "@/components/PrintButton";
 import { Notice } from "@/components/ui";
 import { OFFICER_ROLES, hasRole, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { NOTICE_DAYS, owedOf } from "@/lib/debtors";
+import { owedOf } from "@/lib/debtors";
+import { settingsAt } from "@/lib/settings";
 import { type LetterKind, fullName, lettersFor, officeHolders } from "@/lib/documents";
 import { officerNames } from "@/lib/ledger";
 import { memberPosition } from "@/lib/loans";
@@ -57,7 +58,10 @@ export default async function LoanLetterPage({ params, searchParams }: { params:
   const treas = approved("TREASURER");
   const guar = approved("GUARANTOR");
   const yearEnd = year ? day(year.endDate) : "the end of February";
-  const perMonth = monthlyInterest(loan.amountKobo);
+  const rules = await settingsAt();
+  const NOTICE_DAYS = rules.noticeDays;
+  const per1000 = String(rules.interestPer1000);
+  const perMonth = monthlyInterest(loan.amountKobo, rules);
   const titles: Record<LetterKind, string> = { agreement: "Loan agreement", clearance: "Loan clearance letter", notice: "Notice of default" };
 
   return (
@@ -90,7 +94,7 @@ export default async function LoanLetterPage({ params, searchParams }: { params:
               {loan.disbursedOn ? <>, paid to you on <strong>{day(loan.disbursedOn)}</strong>{loan.bankRef ? ` (bank reference ${loan.bankRef})` : ""}</> : null}. The terms are:
             </p>
             <ol className="ml-5 flex list-decimal flex-col gap-2 print:gap-1">
-              <li><strong>Interest</strong> is ₦25 for every ₦1,000 still owed at the end of each month (2.5% a month), charged when the month is closed. On the full amount that is {formatNaira(perMonth)} a month; it falls as you repay.</li>
+              <li><strong>Interest</strong> is ₦{per1000} for every ₦1,000 still owed at the end of each month ({Number(per1000) / 10}% a month), charged when the month is closed. On the full amount that is {formatNaira(perMonth)} a month; it falls as you repay.</li>
               <li>Each month&apos;s interest is <strong>due by the 15th of the next month</strong>. Interest not paid by then is carried forward as arrears. There is no penalty and no interest on interest. Any interest overpaid is a credit, refunded at year end.</li>
               <li>You may repay any part of the loan at any time, into GT Bank account 0033550876 (Iyobor Progressive Union). Each payment reduces the balance that interest is charged on.</li>
               <li>The loan and any interest owed must be <strong>cleared by {yearEnd}</strong>, the end of the financial year. Anything still owed then is taken from your savings at year-end settlement.</li>
@@ -108,7 +112,7 @@ export default async function LoanLetterPage({ params, searchParams }: { params:
             ) : (
               <p className="text-sm text-muted">This loan was recorded from the union&apos;s workbook with a verbal guarantee.</p>
             )}
-            {loan.isException ? <p className="text-sm">This loan is above the usual limit (12 times the monthly contribution) and was approved as an exception{loan.exceptionReason ? `: ${loan.exceptionReason}` : ""}.</p> : null}
+            {loan.isException ? <p className="text-sm">This loan is above the usual limit ({String(rules.loanLimitMonths)} times the monthly contribution) and was approved as an exception{loan.exceptionReason ? `: ${loan.exceptionReason}` : ""}.</p> : null}
             <div className="mt-4 grid gap-8 sm:grid-cols-2 print:mt-2 print:grid-cols-2 print:gap-x-10 print:gap-y-5">
               <Sign who="Borrower" name={borrower} />
               {guarantor ? <Sign who="Guarantor" name={guarantor} /> : <span />}

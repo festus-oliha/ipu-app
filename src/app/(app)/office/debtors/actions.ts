@@ -1,12 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { DEFAULT_AFTER_MONTHS, interestArrearsMonths } from "@/lib/notices";
+import { interestArrearsMonths } from "@/lib/notices";
+import { settingsAt } from "@/lib/settings";
 import type { FormResult } from "@/components/ActionForm";
 import { audit } from "@/lib/audit";
 import { PAYMENT_ROLES, actionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { NOTICE_DAYS, owedOf, recoveryPlan } from "@/lib/debtors";
+import { owedOf, recoveryPlan } from "@/lib/debtors";
 import { closeLoansIfCleared, memberPosition } from "@/lib/loans";
 import { formatNaira, formatNairaSms } from "@/lib/money";
 import { queueEmail, queueSms } from "@/lib/notify";
@@ -47,15 +48,16 @@ export async function declareDefault(loanId: string, _prev: FormResult, form: Fo
   if (!loan || loan.status !== "DISBURSED") return { error: "Only a paid-out loan can be declared in default." };
   if (loan.borrower.userId === user.id) return { error: "You cannot act on your own loan." };
   // Default only after interest has gone unpaid for two months in a row (year end is settled separately).
+  const { defaultAfterMonths, noticeDays } = await settingsAt();
   const arrears = await interestArrearsMonths(loan.borrowerId);
-  if (arrears < DEFAULT_AFTER_MONTHS) {
-    return { error: `A loan can be declared in default only after ${DEFAULT_AFTER_MONTHS} months of unpaid interest. ${arrears ? `Interest is unpaid for ${arrears} month so far.` : "Interest is up to date."} Send a reminder or record contact instead.` };
+  if (arrears < defaultAfterMonths) {
+    return { error: `A loan can be declared in default only after ${defaultAfterMonths} months of unpaid interest. ${arrears ? `Interest is unpaid for ${arrears} month so far.` : "Interest is up to date."} Send a reminder or record contact instead.` };
   }
   const reason = String(form.get("reason") ?? "").trim();
   if (reason.length < 10) return { errors: { reason: "Explain why (at least 10 characters), e.g. months unpaid and contact attempts." } };
   const p = await memberPosition(loan.borrowerId);
   const from = new Date(`${todayLagos()}T00:00:00Z`);
-  from.setUTCDate(from.getUTCDate() + NOTICE_DAYS);
+  from.setUTCDate(from.getUTCDate() + noticeDays);
 
   await db.$transaction(async (tx) => {
     await tx.loan.update({ where: { id: loan.id }, data: { status: "DEFAULTED" } });

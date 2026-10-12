@@ -23,6 +23,7 @@ export default async function OfficePage() {
     { href: "/office/reports", title: "Reports", text: "Statements, loan book, income summary, Excel", badge: "" },
     { href: "/office/receipts", title: "Receipts", text: "Uploaded receipts to check", badge: receipts ? `${receipts} waiting` : "" },
     ...(hasRole(user, ...MEMBER_ADMIN_ROLES) ? [{ href: "/office/id-cards", title: "ID cards and certificates", text: "Print members' ID cards and membership certificates", badge: "" }] : []),
+    { href: "/office/settings", title: "Settings", text: "Interest rate, loan limit, notice rules, password-help phone", badge: "" },
     ...(hasRole(user, ...LOG_ROLES) ? [{ href: "/office/change-log", title: "Change log", text: "Every change: who, when, before and after", badge: "" }] : []),
   ];
   return (

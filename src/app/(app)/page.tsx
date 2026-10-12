@@ -9,9 +9,9 @@ import { formatNaira } from "@/lib/money";
 import { MONTH_NAMES, currentYear, formatDate, todayLagos } from "@/lib/periods";
 import { yearChangeReminders } from "@/lib/yearEnd";
 import { displayPhone } from "@/lib/phone";
-import { DEFAULT_RULES } from "@/lib/rules";
+import { loanMonthsText } from "@/lib/rules";
+import { settingsAt } from "@/lib/settings";
 
-const DIVIDEND_MIN_MONTHS = DEFAULT_RULES.dividendMinMonths;
 
 const RECEIPT_STATUS = { PENDING: "Waiting to be checked", CONFIRMED: "Confirmed", REJECTED: "Not accepted" } as const;
 
@@ -19,6 +19,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { uploaded } = await searchParams;
   const user = await requireUser();
   const year = await currentYear();
+  const rules = await settingsAt();
+  const DIVIDEND_MIN_MONTHS = rules.dividendMinMonths;
   const totals = user.member && year ? await memberYearTotals(user.member.id, year) : null;
   const memberId = user.member?.id;
   const [position, myLoans, guaranteeing, receipts] = memberId
@@ -36,7 +38,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const nextMonth = MONTH_NAMES[mm % 12];
   const dueMonth = dd <= 15 ? MONTH_NAMES[mm - 1] : nextMonth;
   const yearEndWarning = mm === 12 || mm === 1 || (mm === 2 && dd <= 15);
-  const loanWindowOpen = mm >= 3;
+  const loanWindowOpen = rules.loanMonths.includes(mm);
   const hasPending = myLoans.some((l) => l.status !== "DISBURSED" && l.status !== "REJECTED");
   const owes = position ? position.principal > 0n || position.interestOwed > 0n : false;
   const loanStat = !position || (position.principal <= 0n && position.interestOwed === 0n)
@@ -129,13 +131,13 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               </ul>
             ) : (
               <p className="mb-4 text-sm text-muted">
-                You can borrow up to your usual monthly contribution × 12. Interest is ₦25 per ₦1,000 a month, due by the 15th of the next month.
+                You can borrow up to your usual monthly contribution × {String(rules.loanLimitMonths)}. Interest is ₦{String(rules.interestPer1000)} per ₦1,000 a month, due by the 15th of the next month.
               </p>
             )}
             {hasPending || exited ? null : loanWindowOpen ? (
               <LinkButton href="/loans/new">Request a loan</LinkButton>
             ) : (
-              <p className="text-sm text-muted">Loans are given from March to December.</p>
+              <p className="text-sm text-muted">Loans are given from {loanMonthsText(rules)}.</p>
             )}
           </Card>
 

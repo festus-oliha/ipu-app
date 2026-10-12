@@ -23,7 +23,10 @@ export function LoanRequestForm({
   borrowers,
   self,
   guarantors,
+  terms,
 }: {
+  /** The union's loan terms in plain words (from Settings). */
+  terms: string;
   /** Officers choose the borrower; members borrow for themselves (`self`). */
   borrowers?: BorrowerOption[];
   self?: BorrowerOption;
@@ -89,8 +92,7 @@ export function LoanRequestForm({
       ) : null}
 
       <Notice>
-        Interest is ₦25 for every ₦1,000 owed, each month, due by the 15th of the next month. Unpaid interest is added to the next month.
-        Loans are given from March to December. Anything unpaid at the end of February is taken from your savings.
+        {terms}
       </Notice>
 
       <FormError message={state.error} />

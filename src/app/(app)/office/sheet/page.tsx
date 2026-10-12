@@ -11,6 +11,7 @@ import { currentYear, formatDate, monthKey, monthLabel, monthStart, todayLagos }
 import { buildMonthSheet } from "@/lib/sheet";
 import { closeMonth, reopenMonth, setOpeningBank, signMonth } from "./actions";
 import { CloseForm, OpeningForm, ReopenForm, SignButton } from "./ClosePanel";
+import { settingsAt } from "@/lib/settings";
 
 export const metadata: Metadata = { title: "Monthly sheet" };
 
@@ -183,7 +184,7 @@ export default async function SheetPage({ searchParams }: { searchParams: Promis
               ) : opening === null ? (
                 <p className="text-sm text-muted">Enter the opening bank balance (on the March sheet) before closing.</p>
               ) : (
-                <CloseForm action={closeMonth.bind(null, period.id)} expected={formatNaira(expected!)} />
+                <CloseForm action={closeMonth.bind(null, period.id)} expected={formatNaira(expected!)} interestPer1000={String((await settingsAt(period.month)).interestPer1000)} />
               )
             ) : (
               <p className="text-sm text-muted">The Treasurer closes the month once all payments are in and the bank statement matches.</p>

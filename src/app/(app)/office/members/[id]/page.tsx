@@ -81,9 +81,11 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
             />
           </Card>
           <div className="grid gap-6 md:grid-cols-2">
-            <Card title="Login">
-              <ResetPasswordForm action={resetMemberPassword.bind(null, member.id)} hasLogin={Boolean(member.userId)} />
-            </Card>
+            {hasRole(user, "ADMIN") ? (
+              <Card title="Login">
+                <ResetPasswordForm action={resetMemberPassword.bind(null, member.id)} hasLogin={Boolean(member.userId)} />
+              </Card>
+            ) : null}
             {hasRole(user, "ADMIN") ? (
               <Card title="Office roles">
                 <RolesForm action={setMemberRoles.bind(null, member.id)} current={roles} />

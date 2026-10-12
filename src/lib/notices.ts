@@ -2,11 +2,8 @@ import "server-only";
 import { db } from "./db";
 import { coveredMonths } from "./ledger";
 import { monthKey } from "./periods";
+import { settingsAt } from "./settings";
 
-/** Months of unpaid interest needed before a loan can be declared in default. */
-export const DEFAULT_AFTER_MONTHS = 2;
-/** Months with no contribution, while on loan, before a notice is sent (in the next month). */
-export const CONTRIBUTION_NOTICE_AFTER = 2;
 
 /**
  * How many of the latest closed months in a row ended with the previous
@@ -29,7 +26,7 @@ export async function interestArrearsMonths(memberId: string) {
 
 /**
  * Members with a loan paid out who have made no contribution for the last
- * `CONTRIBUTION_NOTICE_AFTER` full months (months before `todayIso`'s month,
+ * N full months (Settings: contribution notice) (months before `todayIso`'s month,
  * in the current year, from the month the loan was paid out). A payment
  * made ahead counts as contributing.
  */
@@ -37,6 +34,7 @@ export async function notContributing(todayIso: string) {
   const thisMonth = new Date(`${todayIso.slice(0, 7)}-01T00:00:00Z`);
   const year = await db.financialYear.findFirst({ where: { status: { not: "CLOSED" }, startDate: { lte: thisMonth }, endDate: { gte: thisMonth } } });
   if (!year) return [];
+  const { contributionNoticeAfter } = await settingsAt(todayIso);
   const loans = await db.loan.findMany({
     where: { status: { in: ["DISBURSED", "DEFAULTED"] }, borrower: { status: "ACTIVE" } },
     include: { borrower: true },
@@ -55,7 +53,7 @@ export async function notContributing(todayIso: string) {
       if (covered.get(l.borrowerId)?.has(monthKey(m))) break;
       missed.unshift(m);
     }
-    if (missed.length >= CONTRIBUTION_NOTICE_AFTER) out.set(l.borrowerId, { member: l.borrower, months: missed });
+    if (missed.length >= contributionNoticeAfter) out.set(l.borrowerId, { member: l.borrower, months: missed });
   }
   return [...out.values()];
 }

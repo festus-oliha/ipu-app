@@ -28,6 +28,24 @@ export const DEFAULT_RULES: Rules = {
   dividendMinMonths: 4,
 };
 
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** "March to December": the months in which new loans are given. */
+export function loanMonthsText(rules: Rules = DEFAULT_RULES) {
+  const m = rules.loanMonths;
+  return m.length ? `${MONTHS[m[0] - 1]} to ${MONTHS[m[m.length - 1] - 1]}` : "no months";
+}
+
+/** Months from `first` to `last` (1–12), wrapping past December. */
+export function monthRange(first: number, last: number) {
+  const out: number[] = [];
+  for (let m = first, i = 0; i < 12; i++, m = (m % 12) + 1) {
+    out.push(m);
+    if (m === last) break;
+  }
+  return out;
+}
+
 /** Interest charged for one month on a balance: balance ÷ 1,000 × 25, to the kobo. */
 export function monthlyInterest(balance: Kobo, rules: Rules = DEFAULT_RULES): Kobo {
   if (balance <= 0n) return 0n;
@@ -133,7 +151,7 @@ export function checkLoanRequest(
   const errors: string[] = [];
   if (input.requested <= 0n) errors.push("Enter the amount you want to borrow.");
   if (!rules.loanMonths.includes(input.month)) {
-    errors.push("New loans are given from March to December only.");
+    errors.push(`New loans are given from ${loanMonthsText(rules)} only.`);
   }
   if (input.guarantorIsBorrower) errors.push("You cannot be your own guarantor.");
   if (input.guarantorActiveGuarantees >= rules.maxGuarantees) {

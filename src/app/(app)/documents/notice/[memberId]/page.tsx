@@ -13,6 +13,7 @@ import { positionsThrough } from "@/lib/loans";
 import { formatNaira } from "@/lib/money";
 import { notContributing, yearEndNoticeOpen } from "@/lib/notices";
 import { currentYear, monthLabel, todayLagos } from "@/lib/periods";
+import { settingsAt } from "@/lib/settings";
 
 export const metadata: Metadata = { title: "Notice" };
 
@@ -46,7 +47,7 @@ export default async function NoticePage({ params, searchParams }: { params: Pro
 
   const today = todayLagos();
   const todayDate = new Date(`${today}T00:00:00Z`);
-  const [year, signers, positions] = await Promise.all([currentYear(), officeHolders(), positionsThrough(FAR)]);
+  const [year, signers, positions, rules] = await Promise.all([currentYear(), officeHolders(), positionsThrough(FAR), settingsAt()]);
   if (!year) return <Notice tone="warning">No open financial year.</Notice>;
 
   type Page = { member: { id: string; title: string | null; fullName: string; memberNo: string; address: string | null; usualMonthlyKobo: bigint }; months?: Date[]; guarantor?: string | null };
@@ -77,7 +78,7 @@ export default async function NoticePage({ params, searchParams }: { params: Pro
         <div className="print:hidden"><Notice tone="warning">Year-end notices are meant for January and February. This one is dated today, {day(todayDate)}.</Notice></div>
       ) : null}
       {pages.length === 0 ? (
-        <Notice>{kind === "contribution" ? "Nobody on loan has missed two months of contributions." : "Nobody owes the union anything at the moment."}</Notice>
+        <Notice>{kind === "contribution" ? `Nobody on loan has missed ${rules.contributionNoticeAfter} months of contributions.` : "Nobody owes the union anything at the moment."}</Notice>
       ) : null}
 
       {pages.map(({ member, months }, i) => {
@@ -105,7 +106,7 @@ export default async function NoticePage({ params, searchParams }: { params: Pro
                   </p>
                   <p>
                     Paying interest alone is not enough. Members on loan must keep up their monthly contributions: they build your savings, which
-                    secure your loan, and they count towards your share of the dividend at year end (only members who contribute for at least four months qualify).
+                    secure your loan, and they count towards your share of the dividend at year end (only members who contribute for at least {rules.dividendMinMonths} months qualify).
                   </p>
                   <p>
                     Please pay the missed contributions{member.usualMonthlyKobo > 0n && months?.length ? <> ({months.length} × {formatNaira(member.usualMonthlyKobo)} = <strong>{formatNaira(member.usualMonthlyKobo * BigInt(months.length))}</strong>)</> : null}

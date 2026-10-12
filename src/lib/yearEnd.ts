@@ -3,6 +3,7 @@ import { db } from "./db";
 import { LIVE, coveredMonths } from "./ledger";
 import { positionsThrough } from "./loans";
 import { dividend, qualifiesForDividend, settle } from "./rules";
+import { settingsAt } from "./settings";
 
 /** The year to settle: the oldest one not yet closed. */
 export async function yearToSettle() {
@@ -33,6 +34,7 @@ export type SettlementRow = {
 export async function yearEndPreview(year: { id: string; startDate: Date; endDate: Date; dividendRateBps: number | null }) {
   const lastMonth = new Date(Date.UTC(year.endDate.getUTCFullYear(), year.endDate.getUTCMonth(), 1));
   const rate = year.dividendRateBps ?? 0;
+  const rules = await settingsAt(year.endDate);
   const [members, contribRows, deductRows, positions, flows, investments] = await Promise.all([
     db.member.findMany({ where: { status: { not: "EXITED" } }, orderBy: { memberNo: "asc" } }),
     db.ledgerEntry.groupBy({ by: ["memberId", "periodId"], where: { ...LIVE, type: "CONTRIBUTION", memberId: { not: null }, period: { yearId: year.id } }, _sum: { amountKobo: true } }),
@@ -62,7 +64,7 @@ export async function yearEndPreview(year: { id: string; startDate: Date; endDat
     const c = { total: paid.total - (deducted.get(m.id) ?? 0n), months: Math.max(covered.get(m.id)?.size ?? 0, paid.months) };
     const pos = positions.get(m.id) ?? { principal: 0n, interestOwed: 0n };
     if (c.total === 0n && pos.principal === 0n && pos.interestOwed === 0n) continue;
-    const div = dividend(c.total, rate, c.months);
+    const div = dividend(c.total, rate, c.months, rules);
     const s = settle({ contributions: c.total, dividend: div, principal: pos.principal, interestOwed: pos.interestOwed });
     rows.push({
       memberId: m.id,
@@ -71,7 +73,7 @@ export async function yearEndPreview(year: { id: string; startDate: Date; endDat
       phone: m.phone,
       contributions: c.total,
       months: c.months,
-      qualifies: qualifiesForDividend(c.months),
+      qualifies: qualifiesForDividend(c.months, rules),
       dividend: div,
       ...s,
     });

@@ -10,6 +10,7 @@ import { officerNames } from "@/lib/ledger";
 import { formatNaira } from "@/lib/money";
 import { formatDate, todayLagos } from "@/lib/periods";
 import { loanLimit, monthlyInterest } from "@/lib/rules";
+import { settingsAt } from "@/lib/settings";
 import { disburseLoan, guarantorDecision, presidentDecision, treasurerDecision } from "../actions";
 import { DecisionForm, DisburseForm, GuarantorForm } from "./StepForms";
 
@@ -34,7 +35,8 @@ export default async function LoanPage({ params }: { params: Promise<{ id: strin
 
   const names = await officerNames([loan.requestedById, ...loan.approvals.map((a) => a.byId)]);
   const position = await memberPosition(loan.borrowerId);
-  const limit = loanLimit(loan.borrower.usualMonthlyKobo);
+  const rules = await settingsAt();
+  const limit = loanLimit(loan.borrower.usualMonthlyKobo, rules);
   const exceptionDone = loan.approvals.some((a) => a.step === "EXCEPTION" && a.decision === "APPROVED");
   const presidentId = loan.approvals.find((a) => a.step === "PRESIDENT")?.byId;
 
@@ -102,7 +104,7 @@ export default async function LoanPage({ params }: { params: Promise<{ id: strin
           value={formatNaira(position.interestOwed < 0n ? -position.interestOwed : position.interestOwed, { compact: true })}
           note="Due by the 15th"
         />
-        <Stat label="Monthly interest on this loan" value={formatNaira(monthlyInterest(loan.amountKobo), { compact: true })} note="₦25 per ₦1,000" />
+        <Stat label="Monthly interest on this loan" value={formatNaira(monthlyInterest(loan.amountKobo, rules), { compact: true })} note={`₦${rules.interestPer1000} per ₦1,000`} />
       </div>
 
       <Card title="Steps">

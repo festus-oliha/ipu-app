@@ -22,13 +22,13 @@ export function OpeningForm({ action }: { action: Action }) {
   );
 }
 
-export function CloseForm({ action, expected }: { action: Action; expected: string }) {
+export function CloseForm({ action, expected, interestPer1000 }: { action: Action; expected: string; interestPer1000: string }) {
   const [state, formAction, pending] = useActionState<CloseState, FormData>(action, {});
   return (
     <form action={formAction} className="flex flex-col gap-3">
       <p className="text-sm">
         The app expects the bank balance at the end of this month to be <span className="font-semibold">{expected}</span>. Enter the balance on
-        the bank statement. Closing charges each borrower&apos;s interest (₦25 per ₦1,000 still owed), due by the 15th of next month, and stops
+        the bank statement. Closing charges each borrower&apos;s interest (₦{interestPer1000} per ₦1,000 still owed), due by the 15th of next month, and stops
         further payments being entered in this month.
       </p>
       <label className="text-sm font-semibold">

@@ -10,6 +10,7 @@ import { expectedBank, openingBank } from "@/lib/monthClose";
 import { currentYear, formatDate, monthKey, monthLabel, todayLagos } from "@/lib/periods";
 import { yearChangeReminders } from "@/lib/yearEnd";
 import { notContributing, yearEndNoticeOpen } from "@/lib/notices";
+import { settingsAt } from "@/lib/settings";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -81,7 +82,7 @@ export default async function DashboardPage() {
   const proposed = investments.filter((i) => i.status === "PROPOSED").length;
   if (proposed) todo.push({ text: `${proposed} investment${proposed === 1 ? "" : "s"} waiting for approval`, href: "/office/bank" });
   const notPaying = await notContributing(today);
-  if (notPaying.length) todo.push({ text: `${notPaying.length} borrower${notPaying.length === 1 ? " has" : "s have"} paid no contribution for 2 months or more: notice due`, href: "/office/debtors?show=contrib" });
+  if (notPaying.length) todo.push({ text: `${notPaying.length} borrower${notPaying.length === 1 ? " has" : "s have"} paid no contribution for ${(await settingsAt()).contributionNoticeAfter} months or more: notice due`, href: "/office/debtors?show=contrib" });
   if (yearEndNoticeOpen(today) && borrowers + inArrears > 0) todo.push({ text: "Year end is near: print year-end notices for members who still owe", href: "/documents/notice/all?kind=yearend" });
   if (failed) todo.push({ text: `${failed} message${failed === 1 ? "" : "s"} failed to send`, href: "/office/messages?show=FAILED" });
   if (hasRole(user, "ADMIN")) todo.push(...(await yearChangeReminders(today)));

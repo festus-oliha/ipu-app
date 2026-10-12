@@ -11,7 +11,7 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   return (
     <nav aria-label="Main" className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-3">
       {items.map((item) => {
-        const more = ["/office/bank", "/office/exits", "/office/year-end", "/office/messages", "/office/reports", "/office/change-log", "/office/id-cards"];
+        const more = ["/office/bank", "/office/exits", "/office/year-end", "/office/messages", "/office/reports", "/office/change-log", "/office/id-cards", "/office/settings"];
         const active = item.href === "/" ? path === "/" : item.exact ? path === item.href || more.some((m) => path.startsWith(m)) : path.startsWith(item.href);
         return (
           <Link

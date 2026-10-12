@@ -9,7 +9,8 @@ import { activeGuarantees, memberPosition, pendingLoanTotal } from "@/lib/loans"
 import { formatNairaSms, parseNaira } from "@/lib/money";
 import { queueSms } from "@/lib/notify";
 import { MONTH_NAMES, formatDate, monthLabel, parseDateInput, periodFor, todayLagos } from "@/lib/periods";
-import { DEFAULT_RULES, checkLoanRequest, monthlyInterest } from "@/lib/rules";
+import { checkLoanRequest, loanMonthsText, monthlyInterest } from "@/lib/rules";
+import { settingsAt } from "@/lib/settings";
 
 export type LoanFormState = { errors?: Record<string, string>; values?: Record<string, string>; error?: string };
 export type StepState = { error?: string };
@@ -59,7 +60,7 @@ export async function requestLoan(_prev: LoanFormState, form: FormData): Promise
     month: Number(todayLagos().slice(5, 7)),
     guarantorIsBorrower: guarantor.id === borrower.id,
     guarantorActiveGuarantees: await activeGuarantees(guarantor.id),
-  });
+  }, await settingsAt());
   if (check.errors.length) {
     for (const e of check.errors) {
       if (/guarantor/i.test(e)) errors.guarantor = e;
@@ -196,14 +197,15 @@ export async function disburseLoan(loanId: string, _prev: StepState, form: FormD
   const date = parseDateInput(dateText);
   if (!date) return { error: "Enter the date the money left the bank." };
   if (dateText > todayLagos()) return { error: "The date cannot be in the future." };
-  if (!DEFAULT_RULES.loanMonths.includes(date.getUTCMonth() + 1)) return { error: "Loans are paid out from March to December only." };
+  const rules = await settingsAt(date);
+  if (!rules.loanMonths.includes(date.getUTCMonth() + 1)) return { error: `Loans are paid out from ${loanMonthsText(rules)} only.` };
   if (bankRef.length < 3) return { error: "Enter the bank transfer reference." };
   const period = await periodFor(date);
   if (!period) return { error: "That date is outside the open financial year." };
   if (period.status !== "OPEN") return { error: `${monthLabel(period.month)} is closed. Ask the Admin to reopen it.` };
 
   const due = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 15));
-  const firstInterest = monthlyInterest(loan.amountKobo);
+  const firstInterest = monthlyInterest(loan.amountKobo, rules);
 
   await db.$transaction(async (tx) => {
     const entry = await tx.ledgerEntry.create({
