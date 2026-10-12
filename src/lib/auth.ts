@@ -53,6 +53,8 @@ export const OFFICER_ROLES: Role[] = ["ADMIN", "PRESIDENT", "TREASURER", "SECRET
 
 export const PAYMENT_ROLES: Role[] = ["ADMIN", "PRESIDENT", "TREASURER", "SECRETARY"];
 export const MEMBER_ADMIN_ROLES: Role[] = ["ADMIN", "SECRETARY"];
+/** Who may read the change log. */
+export const LOG_ROLES: Role[] = ["ADMIN", "AUDITOR"];
 
 /** Use in pages: signed-in user holding one of the roles, else back to home. */
 export async function requireRole(...roles: Role[]): Promise<CurrentUser> {

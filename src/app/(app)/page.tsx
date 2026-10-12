@@ -170,6 +170,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <Card title="Office">
           <div className="flex flex-wrap gap-2">
             {hasRole(user, ...PAYMENT_ROLES) ? <LinkButton href="/office/payments/new">Record payment</LinkButton> : null}
+            <LinkButton href="/office/dashboard" variant="secondary">Dashboard</LinkButton>
             <LinkButton href="/office/sheet" variant="secondary">Monthly sheet</LinkButton>
             <LinkButton href="/office/loans" variant="secondary">Loans</LinkButton>
             <LinkButton href="/office/debtors" variant="secondary">Debtors</LinkButton>
